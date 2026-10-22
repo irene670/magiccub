@@ -616,10 +616,18 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api; else 
       const c1 = cells54.map((p, fi) => { const g = fm[Math.floor(fi / 9)].map((x, c) => gm[c] / (x + 1e-6)); const d = new Float32Array(p.data.length); for (let i = 0; i < d.length; i++) d[i] = p.data[i] * g[i % 3]; return { S: p.S, data: d }; });
       const gains = seamGains(c1, r1.homeImgCap);
       const c2 = c1.map((p, fi) => { const g = gains[Math.floor(fi / 9)]; const d = new Float32Array(p.data.length); for (let i = 0; i < d.length; i++) d[i] = Math.min(1.5, p.data[i] / g); return { S: p.S, data: d }; });
-      const r2 = jigsaw(c2, Object.assign({}, o1, { normalize: false, faceRot: r1.faceRot, rotSearch: [] }));
-      r2.pass1 = r1; r2.gains = gains;
-      return r2;
+      const o2 = Object.assign({}, o1, { normalize: false, faceRot: r1.faceRot, rotSearch: [] });
+      const r2 = jigsaw(c2, o2);
+      if (JSON.stringify(r2.det) === JSON.stringify(r1.det)) return r1;
+      if (!r2.valid) return r1; if (!r1.valid) return r2;
+      // keep pass 2 only if it wins under BOTH measures (before and after exposure correction)
+      const [a1, b1] = jigsaw(cells54, Object.assign({}, o1, { faceRot: r1.faceRot, rotSearch: [], evalOnly: [r1.det, r2.det] }));
+      const [a2, b2] = jigsaw(c2, Object.assign({}, o2, { evalOnly: [r1.det, r2.det] }));
+      const pick = (b1 < a1 && b2 < a2) ? r2 : r1;
+      pick.passScores = [a1, b1, a2, b2]; pick.gains = gains;
+      return pick;
     }
+    const FQ = opts.forceCq || null;
     // exposure: each scanned face holds stickers from all pictures, so equalise per-face mean colour
     if (opts.normalize !== false) {
       const fm = [], gm = [0, 0, 0];
@@ -697,7 +705,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api; else 
       const h = hungarian(C); det.corners = h.assign.map((c, s) => [c, T[s][c]]);
     }
     function optCentres(det, img) {
-      for (let f = 0; f < 6; f++) { let b = 1e18, bq = 0; for (let q = 0; q < 4; q++) { const v = localCost(img, [[f * 9 + 4, (f * 9 + 4) * 4 + ((4 - q) % 4)]], ['k']); if (v < b) { b = v; bq = q; } } det.cq[f] = bq; }
+      for (let f = 0; f < 6; f++) { if (FQ && FQ[f] != null) { det.cq[f] = FQ[f]; continue; } let b = 1e18, bq = 0; for (let q = 0; q < 4; q++) { const v = localCost(img, [[f * 9 + 4, (f * 9 + 4) * 4 + ((4 - q) % 4)]], ['k']); if (v < b) { b = v; bq = q; } } det.cq[f] = bq; }
     }
     function partialImg(det, parts) {
       const img = new Array(54);
@@ -807,7 +815,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api; else 
       // options per slot: list of {piece key, entries}
       const opt = order.map(sl => {
         const o = [];
-        if (sl.type === 'q') for (let q = 0; q < 4; q++) o.push({ pk: 'q', val: q, ent: [[sl.K * 9 + 4, (sl.K * 9 + 4) * 4 + ((4 - q) % 4)]] });
+        if (sl.type === 'q') { for (let q = 0; q < 4; q++) { if (!FQ || FQ[sl.K] == null || FQ[sl.K] === q) o.push({ pk: 'q', val: q, ent: [[sl.K * 9 + 4, (sl.K * 9 + 4) * 4 + ((4 - q) % 4)]] }); } }
         else if (sl.type === 'e') for (let s2 = 0; s2 < 12; s2++) for (let t = 0; t < 2; t++) o.push({ pk: 's' + s2, ps: s2, val: t, ent: eEnt(s2, sl.K, t) });
         else for (let s2 = 0; s2 < 8; s2++) for (let t = 0; t < 3; t++) o.push({ pk: 'k' + s2, ps: s2, val: t, ent: cEnt(s2, sl.K, t) });
         return o;
@@ -882,6 +890,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api; else 
       faceRot = bestR.fr; if (opts.debug) console.log('  [rot]', hyp.sort((a, b) => a[0] - b[0]).slice(0, 4).map(h => h[1] + ':' + h[0].toFixed(1)).join(' '));
     }
     setTables(faceRot);
+    if (opts.evalOnly) return opts.evalOnly.map(d => score(homeImages(d)));
     let beamRes = [];
     for (const st of (opts.starts || [0, 2, 3, 5])) beamRes = beamRes.concat(beamSearch(opts.beam || 1200, st));
     beamRes.sort((a, b) => a.score - b.score);
@@ -897,7 +906,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api; else 
       while (Date.now() - t0 < budget * (r + 1) / Math.min(seeds.length, opts.polish || 4) && it < (opts.ilsIters || 4000)) {
         it++;
         const d = clone(cur); const k = rnd();
-        if (k < 0.4) { const f = ri(6); d.cq[f] = (d.cq[f] + 1 + ri(3)) % 4; if (rnd() < 0.5) { const g = ri(6); d.cq[g] = (d.cq[g] + 1 + ri(3)) % 4; } }
+        if (k < 0.4) { const f = ri(6); d.cq[f] = (d.cq[f] + 1 + ri(3)) % 4; if (rnd() < 0.5) { const g = ri(6); d.cq[g] = (d.cq[g] + 1 + ri(3)) % 4; } if (FQ) for (let x = 0; x < 6; x++) if (FQ[x] != null) d.cq[x] = FQ[x]; }
         else if (k < 0.7) { const a = ri(12), b = ri(12); const t = d.edges[a]; d.edges[a] = [d.edges[b][0], ri(2)]; d.edges[b] = [t[0], ri(2)]; }
         else { const a = ri(8), b = ri(8); const t = d.corners[a]; d.corners[a] = [d.corners[b][0], ri(3)]; d.corners[b] = [t[0], ri(3)]; }
         // after a centre change, edges are re-fit first from centres + corners
@@ -937,7 +946,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api; else 
       const base = JSON.parse(JSON.stringify(det0)); const cand = [];
       for (let s = 0; s < 8; s++) for (let t = 0; t < 3; t++) if (t !== base.corners[s][1]) cand.push(['ct', s, t]);
       for (let s = 0; s < 12; s++) cand.push(['ef', s, 1 - base.edges[s][1]]);
-      for (let f = 0; f < 6; f++) for (const dq of [1, 2, 3]) cand.push(['cq', f, (base.cq[f] + dq) % 4]);
+      for (let f = 0; f < 6; f++) if (!FQ || FQ[f] == null) for (const dq of [1, 2, 3]) cand.push(['cq', f, (base.cq[f] + dq) % 4]);
       for (let a = 0; a < 12; a++) for (let b = a + 1; b < 12; b++) for (const fl of [0, 1]) cand.push(['es', a, b, fl]);
       for (let a = 0; a < 8; a++) for (let b = a + 1; b < 8; b++) for (const tw of [0, 1, 2]) cand.push(['cs', a, b, tw]);
       const applyC = (d, [k, a, b, x]) => {
@@ -1044,4 +1053,50 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api; else 
     });
   }
   E.cellBoxes = cellBoxes; E.cellsFromBoxes = cellsFromBoxes;
+})();
+// ---- multi-frame stacking: align a burst of hand-held frames and average them ----
+(function(){
+  const E = (typeof module !== 'undefined' && module.exports) ? module.exports : (typeof window !== 'undefined' ? window.CubeEngine : globalThis.CubeEngine);
+  function gray(d, w, h, k) { const W = Math.floor(w / k), H = Math.floor(h / k), g = new Float32Array(W * H);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { let s = 0; for (let yy = 0; yy < k; yy++) for (let xx = 0; xx < k; xx++) { const i = ((y * k + yy) * w + x * k + xx) * 4; s += d[i] + d[i + 1] + d[i + 2]; } g[y * W + x] = s / (k * k * 3); }
+    return { g, W, H }; }
+  // sharpness: mean squared Laplacian of a coarse gray image
+  function sharpness(fr) { const { g, W, H } = gray(fr.d, fr.w, fr.h, 2); let s = 0, n = 0;
+    for (let y = 2; y < H - 2; y += 2) for (let x = 2; x < W - 2; x += 2) { const i = y * W + x; const l = 4 * g[i] - g[i - 1] - g[i + 1] - g[i - W] - g[i + W]; s += l * l; n++; } return s / n; }
+  // best shift (dx,dy) so that B(x+dx,y+dy) ~ A(x,y); returns shift in level units and residual
+  function shiftSearch(A, B, R, cx, cy, rad) {
+    let best = [0, 0], bv = Infinity; const { W, H } = A;
+    for (let dy = cy - rad; dy <= cy + rad; dy++) for (let dx = cx - rad; dx <= cx + rad; dx++) {
+      let s = 0, n = 0;
+      for (let y = R; y < H - R; y += 2) { const yb = y + dy; if (yb < 0 || yb >= H) continue; for (let x = R; x < W - R; x += 2) { const xb = x + dx; if (xb < 0 || xb >= W) continue; s += Math.abs(A.g[y * W + x] - B.g[yb * W + xb]); n++; } }
+      const v = s / Math.max(1, n); if (v < bv) { bv = v; best = [dx, dy]; }
+    }
+    return { dx: best[0], dy: best[1], res: bv };
+  }
+  // frames: [{d (RGBA), w, h}] same size. returns {d,w,h,used,shifts}
+  function stackFrames(frames, opts) {
+    opts = opts || {}; if (frames.length === 1) return Object.assign({ used: 1 }, frames[0]);
+    const sh = frames.map(sharpness); let ri = 0; sh.forEach((v, i) => { if (v > sh[ri]) ri = i; });
+    const ref = frames[ri], w = ref.w, h = ref.h;
+    const A4 = gray(ref.d, w, h, 4), A2 = gray(ref.d, w, h, 2), A1 = gray(ref.d, w, h, 1);
+    const R4 = Math.round(Math.min(A4.W, A4.H) * 0.12), R2 = R4 * 2;
+    const cand = frames.map((fr, i) => {
+      if (i === ri) return { i, dx: 0, dy: 0, res: 0, sharp: sh[i] };
+      const c = shiftSearch(A4, gray(fr.d, w, h, 4), R4, 0, 0, Math.max(3, Math.round(R4 * 0.8)));
+      const f = shiftSearch(A2, gray(fr.d, w, h, 2), R2, c.dx * 2, c.dy * 2, 2);
+      const g = shiftSearch(A1, gray(fr.d, w, h, 1), R2 * 2, f.dx * 2, f.dy * 2, 1);
+      return { i, dx: g.dx, dy: g.dy, res: f.res, sharp: sh[i] };
+    });
+    // keep frames that are sharp enough and line up well
+    const resMed = cand.map(c => c.res).sort((a, b) => a - b)[Math.floor(cand.length / 2)];
+    const keep = cand.filter(c => c.sharp >= sh[ri] * (opts.minSharp || 0.45) && c.res <= Math.max(resMed * 1.5, 6));
+    const out = new Uint8ClampedArray(w * h * 4);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      let r = 0, g = 0, b = 0, n = 0;
+      for (const c of keep) { const xx = x + c.dx, yy = y + c.dy; if (xx < 0 || yy < 0 || xx >= w || yy >= h) continue; const j = (yy * w + xx) * 4, fd = frames[c.i].d; r += fd[j]; g += fd[j + 1]; b += fd[j + 2]; n++; }
+      const o = (y * w + x) * 4; if (n) { out[o] = r / n; out[o + 1] = g / n; out[o + 2] = b / n; } else { const j = o; out[o] = ref.d[j]; out[o + 1] = ref.d[j + 1]; out[o + 2] = ref.d[j + 2]; } out[o + 3] = 255;
+    }
+    return { d: out, w, h, used: keep.length, shifts: keep.map(c => [c.dx, c.dy]) };
+  }
+  E.stackFrames = stackFrames; E.sharpness = sharpness;
 })();
