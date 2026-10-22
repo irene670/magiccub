@@ -1,0 +1,958 @@
+<title>名畫方塊解鎖</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="theme-color" content="#11141c">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@600;800&family=Noto+Sans+TC:wght@400;500;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: one-screen app — 3D cube stage on top, camera "gallery frame" below, actions pinned at the bottom. Museum-at-night palette. */
+:root{
+  --ink:#11141c; --wall:#181c27; --panel:#212736; --line:#2e3547;
+  --paper:#efe7d6; --muted:#a49d8c; --gold:#c9a45c; --gold-ink:#1b1608;
+  --ok:#86c39a; --warn:#e3a95d; --bad:#e3756a;
+  --f-display:"Noto Serif TC","Songti TC",serif;
+  --f-body:"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+  color-scheme:dark;
+}
+html,body{height:100%}
+body{background:var(--ink);color:var(--paper);font-family:var(--f-body);font-size:15px;margin:0;overflow:hidden;-webkit-tap-highlight-color:transparent}
+button{font-family:inherit}
+#app{height:100%;display:flex;flex-direction:column;max-width:560px;margin:0 auto;padding-left:max(12px,env(safe-area-inset-left,0px));padding-right:max(12px,env(safe-area-inset-right,0px));box-sizing:border-box}
+header{display:flex;align-items:center;gap:10px;padding-block:10px 6px}
+header h1{font-family:var(--f-display);font-weight:800;font-size:19px;letter-spacing:.04em;margin:0;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+header h1 small{font-family:var(--f-body);font-weight:500;font-size:12px;color:var(--muted);letter-spacing:.08em;margin-left:6px}
+.iconbtn{width:38px;height:38px;border-radius:50%;border:1px solid var(--line);background:var(--wall);color:var(--paper);display:grid;place-items:center;cursor:pointer;flex:none}
+.iconbtn:focus-visible,.btn:focus-visible,.chip:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+.steps{display:flex;gap:4px;font-size:12px;color:var(--muted)}
+.steps span{padding:3px 8px;border-radius:99px;border:1px solid var(--line);white-space:nowrap}
+.steps span.on{color:var(--gold-ink);background:var(--gold);border-color:var(--gold);font-weight:700}
+#stage{position:relative;flex:0 0 auto;height:min(36vh,330px);border-radius:16px;background:radial-gradient(120% 90% at 50% 35%,#283048 0%,var(--wall) 60%,var(--ink) 100%);overflow:hidden;touch-action:none}
+#stage canvas{display:block;width:100%;height:100%}
+#stageHint{position:absolute;left:12px;bottom:10px;font-size:12px;color:var(--muted);pointer-events:none}
+#stageBadge{position:absolute;right:10px;top:10px;font-family:var(--f-mono);font-size:13px;padding:4px 10px;border-radius:99px;background:rgba(17,20,28,.7);border:1px solid var(--line)}
+#demoBanner{position:absolute;left:10px;top:10px;right:118px;font-size:12px;color:var(--warn);background:rgba(17,20,28,.75);border:1px solid #5a4422;border-radius:10px;padding:5px 9px;cursor:pointer}
+.chips{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;padding-block:8px}
+.chip{position:relative;aspect-ratio:1;border-radius:10px;border:1.5px dashed var(--line);background:var(--wall);overflow:hidden;cursor:pointer;padding:0;color:var(--muted);font-size:11px;max-width:100%}
+.chip img,.chip canvas{width:100%;height:100%;object-fit:cover;display:block}
+.chip.done{border:1.5px solid var(--gold)}
+.chip.done::after{content:"✓";position:absolute;right:3px;top:2px;font-size:11px;color:var(--gold-ink);background:var(--gold);border-radius:50%;width:15px;height:15px;line-height:15px;text-align:center;font-weight:700}
+.chip.next{border-color:var(--paper);border-style:solid}
+.chip .lbl{position:absolute;left:0;right:0;bottom:0;background:rgba(17,20,28,.72);font-size:10px;padding:1px 0;text-align:center;color:var(--paper)}
+#panel{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:8px;padding-bottom:max(10px,env(safe-area-inset-bottom,0px))}
+#viewport{position:relative;flex:1 1 auto;min-height:150px;border-radius:16px;overflow:hidden;background:#000;touch-action:none}
+#cam{position:absolute;inset:0;width:100%;height:100%}
+#cam.mirror{transform:scaleX(-1)}
+#guide{position:absolute;pointer-events:none;border-radius:10px;box-shadow:0 0 0 2000px rgba(8,10,14,.45);border:2px solid rgba(239,231,214,.85)}
+#guide::before,#guide::after{content:"";position:absolute;inset:0;background:
+  linear-gradient(90deg,transparent calc(33.33% - 1px),rgba(239,231,214,.45) calc(33.33% - 1px),rgba(239,231,214,.45) calc(33.33% + 1px),transparent calc(33.33% + 1px),transparent calc(66.66% - 1px),rgba(239,231,214,.45) calc(66.66% - 1px),rgba(239,231,214,.45) calc(66.66% + 1px),transparent calc(66.66% + 1px))}
+#guide::after{transform:rotate(90deg)}
+#guide.ready{border-color:var(--gold)}
+#guide.ok{border-color:var(--ok)}
+#ring{position:absolute;right:10px;top:10px;width:44px;height:44px}
+#status{position:absolute;left:10px;right:62px;top:10px;font-size:15px;font-weight:700;text-shadow:0 1px 3px #000;line-height:1.35}
+#status small{display:block;font-weight:400;font-size:12px;color:#d8d0bf}
+#camMsg{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center;padding:18px;color:var(--paper);background:var(--wall)}
+#camMsg p{margin:0;max-width:30em;color:var(--muted);font-size:13px;line-height:1.6}
+#zoomBar{position:absolute;left:12px;right:12px;bottom:10px;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--paper);text-shadow:0 1px 2px #000}
+#zoomBar input{flex:1}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.btn{flex:1 1 auto;min-height:46px;border-radius:12px;border:1px solid var(--line);background:var(--panel);color:var(--paper);font-size:15px;font-weight:500;cursor:pointer;padding:0 12px;display:inline-flex;align-items:center;justify-content:center;gap:6px}
+.btn.primary{background:var(--gold);color:var(--gold-ink);border-color:var(--gold);font-weight:700}
+.btn.ghost{background:transparent}
+.btn:disabled{opacity:.4;cursor:default}
+.btn.small{min-height:36px;font-size:13px;flex:0 0 auto}
+.remain{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);min-height:26px;overflow:hidden}
+.remain img,.remain canvas{width:26px;height:26px;border-radius:5px;object-fit:cover;border:1px solid var(--line)}
+/* solve panel */
+#solve{display:flex;flex-direction:column;gap:8px;flex:1 1 auto;min-height:0}
+.hold{display:flex;align-items:center;gap:10px;background:var(--wall);border:1px solid var(--line);border-radius:12px;padding:8px 10px;font-size:13px;line-height:1.45}
+.hold canvas{width:34px;height:34px;border-radius:6px;flex:none}
+.movecard{background:var(--wall);border:1px solid var(--line);border-radius:14px;padding:12px;display:flex;align-items:center;gap:14px}
+.movecard .big{font-family:var(--f-mono);font-weight:700;font-size:40px;min-width:2.2ch;text-align:center;color:var(--gold)}
+.movecard .desc{flex:1;min-width:0;font-size:15px;line-height:1.45}
+.movecard .desc small{display:block;color:var(--muted);font-size:12px}
+.moves{display:flex;gap:5px;overflow-x:auto;padding-block:2px 6px;scrollbar-width:thin}
+.moves span{font-family:var(--f-mono);font-size:13px;padding:5px 8px;border-radius:8px;background:var(--wall);border:1px solid var(--line);flex:none;cursor:pointer}
+.moves span.done{color:var(--muted);opacity:.6}
+.moves span.cur{background:var(--gold);color:var(--gold-ink);border-color:var(--gold);font-weight:700}
+.note{font-size:12px;color:var(--muted);line-height:1.55}
+.note.bad{color:var(--bad)} .note.ok{color:var(--ok)}
+/* sheet */
+.sheet{position:fixed;inset:0;background:rgba(5,6,10,.6);display:flex;align-items:flex-end;justify-content:center;z-index:20}
+.sheet>div{background:var(--wall);border:1px solid var(--line);border-bottom:0;border-radius:18px 18px 0 0;width:100%;max-width:560px;max-height:88%;overflow:auto;padding:16px max(16px,env(safe-area-inset-right,0px)) max(18px,env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));box-sizing:border-box}
+.sheet h2{font-family:var(--f-display);font-size:18px;margin:0 0 10px}
+.sheet h3{font-size:14px;margin:16px 0 6px;color:var(--gold)}
+.sheet p{font-size:13px;line-height:1.65;color:var(--muted);margin:6px 0}
+.toggle{display:flex;align-items:center;gap:10px;font-size:14px;padding:8px 0}
+.toggle input{width:20px;height:20px;accent-color:var(--gold)}
+.txt{background:var(--ink);color:var(--paper);border:1px solid var(--line);border-radius:8px;padding:8px;font-size:14px;font-family:inherit}
+#calibBar{display:flex;flex-direction:column;gap:6px}
+.slots{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.slot{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:6px;display:flex;flex-direction:column;gap:5px}
+.slot.cur{border-color:var(--gold)}
+.slot .pic{aspect-ratio:1;border-radius:8px;background:var(--ink);overflow:hidden;display:grid;place-items:center;color:var(--muted);font-size:12px}
+.slot .pic canvas{width:100%;height:100%}
+.slot input{width:100%;box-sizing:border-box;background:var(--ink);color:var(--paper);border:1px solid var(--line);border-radius:6px;padding:4px 6px;font-size:12px;font-family:inherit}
+.slot .tag{font-size:11px;color:var(--muted);display:flex;justify-content:space-between;align-items:center}
+.slot button{border:1px solid var(--line);background:var(--wall);color:var(--paper);border-radius:6px;font-size:12px;padding:3px 6px;cursor:pointer}
+.busy{position:fixed;inset:0;background:rgba(5,6,10,.7);display:grid;place-items:center;z-index:30;font-size:15px}
+.busy div{background:var(--wall);border:1px solid var(--line);border-radius:14px;padding:18px 22px;text-align:center;line-height:1.6}
+.spin{width:28px;height:28px;border-radius:50%;border:3px solid var(--line);border-top-color:var(--gold);margin:0 auto 8px;animation:sp 1s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.toast{position:fixed;left:50%;top:max(14px,env(safe-area-inset-top,0px));transform:translateX(-50%);background:var(--paper);color:var(--ink);border-radius:99px;padding:8px 16px;font-weight:700;font-size:14px;z-index:40;box-shadow:0 6px 20px rgba(0,0,0,.4);max-width:90vw;text-align:center}
+.pics{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.pics figure{margin:0;display:flex;flex-direction:column;gap:3px;min-width:0}
+.pics canvas{width:100%;aspect-ratio:1;border-radius:8px;border:1px solid var(--line);display:block}
+.pics figcaption{font-size:11px;color:var(--muted);text-align:center}
+#adjWrap{position:relative;touch-action:none;width:100%;max-width:420px;margin:0 auto;aspect-ratio:1}
+#adjCanvas{width:100%;height:100%;display:block;border-radius:10px;background:#000}
+.handle{position:absolute;width:30px;height:30px;margin:-15px 0 0 -15px;border-radius:50%;border:3px solid var(--gold);background:rgba(17,20,28,.35);touch-action:none;cursor:grab}
+.seg{display:flex;gap:6px;flex-wrap:wrap}
+.seg label{flex:1 1 140px;display:flex;gap:8px;align-items:flex-start;border:1px solid var(--line);border-radius:10px;padding:10px;font-size:13px;line-height:1.5;cursor:pointer}
+.seg input{accent-color:var(--gold);margin-top:3px}
+.seg b{display:block;font-size:14px}
+@media (prefers-reduced-motion:reduce){.spin{animation:none}}
+@media (max-height:640px){#stage{height:30vh}.steps{display:none}}
+</style>
+
+<div id="app">
+  <header>
+    <h1>名畫方塊<small>掃描 · 解鎖</small></h1>
+    <div class="steps" id="steps"><span id="st1" class="on">① 掃描</span><span id="st2">② 解鎖</span></div>
+    <button class="iconbtn" id="btnSettings" aria-label="設定與校正">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+    </button>
+  </header>
+
+  <div id="stage">
+    <div id="demoBanner" hidden>尚未校正：目前用示範圖案。點這裡開始校正 →</div>
+    <div id="stageBadge">0 / 6</div>
+    <div id="stageHint">拖曳可旋轉方塊</div>
+  </div>
+
+  <div class="chips" id="chips"></div>
+
+  <div id="panel">
+    <!-- scan / calibrate -->
+    <div id="scanArea" style="display:flex;flex-direction:column;gap:8px;flex:1 1 auto;min-height:0">
+      <div id="viewport">
+        <canvas id="cam"></canvas>
+        <div id="guide"></div>
+        <svg id="ring" viewBox="0 0 44 44"><circle cx="22" cy="22" r="18" fill="rgba(17,20,28,.55)" stroke="rgba(239,231,214,.25)" stroke-width="4"/><circle id="ringArc" cx="22" cy="22" r="18" fill="none" stroke="#c9a45c" stroke-width="4" stroke-linecap="round" stroke-dasharray="113" stroke-dashoffset="113" transform="rotate(-90 22 22)"/></svg>
+        <div id="status">準備相機中…</div>
+        <div id="zoomBar" hidden><span>縮放</span><input id="zoom" type="range" min="0.5" max="3" step="0.01" value="1"><span>拖曳照片對齊方框</span></div>
+        <div id="camMsg" hidden></div>
+      </div>
+      <div class="remain" id="remain"></div>
+      <div id="calibBar" hidden>
+        <div class="note" id="calibStep"></div>
+        <div class="row" style="align-items:center">
+          <label for="calibName" class="note" style="flex:none">這面名稱</label>
+          <input id="calibName" class="txt" style="flex:1;min-width:0">
+          <button class="btn small" id="btnCalRot">↻ 轉 90°</button>
+        </div>
+      </div>
+      <div class="row">
+        <button class="btn" id="btnPhoto">拍照 / 選照片</button>
+        <button class="btn" id="btnCapture">手動擷取</button>
+        <button class="btn small ghost" id="btnFlip" aria-label="切換前後鏡頭">⇄ 鏡頭</button>
+      </div>
+      <div class="row" id="rowScan">
+        <button class="btn ghost" id="btnUndo">重拍上一面</button>
+        <button class="btn primary" id="btnNext" disabled>下一步：解鎖</button>
+      </div>
+      <div class="row" id="rowCalib" hidden>
+        <button class="btn ghost" id="btnCalibCancel">取消校正</button>
+        <button class="btn primary" id="btnCalibSave" disabled>儲存校正</button>
+      </div>
+    </div>
+    <!-- solve -->
+    <div id="solve" hidden>
+      <div class="hold" id="hold"></div>
+      <div class="movecard"><div class="big" id="mvBig">–</div><div class="desc" id="mvDesc"></div></div>
+      <div class="moves" id="moves"></div>
+      <div class="row">
+        <button class="btn" id="btnPrev">◀ 上一步</button>
+        <button class="btn" id="btnPlay">▶ 自動播放</button>
+        <button class="btn primary" id="btnStep">下一步 ▶</button>
+      </div>
+      <div class="row">
+        <button class="btn ghost small" id="btnRescan">回到掃描</button>
+        <button class="btn ghost small" id="btnRestart">從頭播放</button>
+      </div>
+      <div class="note" id="solveNote"></div>
+    </div>
+    <!-- jigsaw preview -->
+    <div id="preview" hidden style="display:flex;flex-direction:column;gap:8px;flex:1 1 auto;min-height:0;overflow:auto">
+      <div class="note" id="pvNote"></div>
+      <div class="pics" id="pvPics"></div>
+      <div class="row">
+        <button class="btn ghost" id="btnPvBack">不對，回去重拍</button>
+        <button class="btn primary" id="btnPvOk">正確，開始解鎖</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<input type="file" id="filePhoto" accept="image/*" hidden>
+<input type="file" id="fileImport" accept="application/json,.json" hidden>
+
+<div class="sheet" id="sheetSettings" hidden><div>
+  <h2>設定</h2>
+  <h3>辨識方式</h3>
+  <div class="seg">
+    <label><input type="radio" name="method" id="mJigsaw" value="jigsaw"><span><b>自動拼圖</b>不用事先建檔。依指示掃 6 面，程式自己把圖拼回去。適合隨機印、客製圖。</span></label>
+    <label><input type="radio" name="method" id="mLibrary" value="library"><span><b>圖庫比對</b>先用還原好的方塊建一次標準圖（校正），之後掃描順序不拘，最穩定。</span></label>
+  </div>
+  <label class="toggle"><input type="checkbox" id="optCenters" checked> 中間那格的圖案也要轉正（步數較多）</label>
+  <p>關閉後只保證 6 面圖塊歸位，最多約 21 步；中心格的圖可能是歪的。開啟後中心圖也會轉正，通常 30～50 步。</p>
+  <label class="toggle"><input type="checkbox" id="optAuto" checked> 對準後自動擷取</label>
+  <h3>圖庫校正（只有「圖庫比對」需要）</h3>
+  <p>App 需要知道「還原後」每一面長什麼樣子，才能把打亂的方塊解回去。請拿一顆<b>已經還原好</b>的方塊做一次校正。</p>
+  <div class="row"><button class="btn primary" id="btnCalib">開始校正</button></div>
+  <div class="row" style="margin-top:8px"><button class="btn small" id="btnExport">匯出校正檔</button><button class="btn small" id="btnImport">匯入校正檔</button><button class="btn small" id="btnSim">模擬掃描測試</button></div>
+  <p id="calibInfo"></p>
+  <div class="row" style="margin-top:12px"><button class="btn ghost" id="btnCloseSettings">關閉</button></div>
+</div></div>
+
+<div class="sheet" id="sheetAdj" hidden><div>
+  <h2 id="adjTitle">微調這一面</h2>
+  <p>拖曳 4 個圓點，對準方塊這一面的 4 個角（貼紙外緣）。下方是拉正後的樣子，九宮格線要剛好落在貼紙之間的縫上。</p>
+  <div id="adjWrap"><canvas id="adjCanvas" width="600" height="600"></canvas></div>
+  <div class="row" style="margin-top:10px;align-items:center">
+    <canvas id="adjPreview" width="150" height="150" style="width:96px;height:96px;border-radius:8px;border:1px solid var(--line)"></canvas>
+    <div class="row" style="flex:1">
+      <button class="btn small" id="btnAdjRot">↻ 轉 90°</button>
+      <button class="btn small" id="btnAdjRetake">重拍這面</button>
+    </div>
+  </div>
+  <div class="row" style="margin-top:10px"><button class="btn primary" id="btnAdjDone">完成</button></div>
+</div></div>
+
+<div class="busy" id="busy" hidden><div><div class="spin"></div><span id="busyText">計算中…</span></div></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script id="srcM2P">/*__MIN2PHASE__*/</script>
+<script id="srcEngine">/*__ENGINE__*/</script>
+<script>/*__DEMO__*/</script>
+<script>
+(function(){
+'use strict';
+const E = window.CubeEngine, F = E.FACES;
+const $ = id => document.getElementById(id);
+const FACE_CN = { U:'上', R:'右', F:'前', D:'下', L:'左', B:'後' };
+const DEFAULT_NAMES = { U:'上面', R:'右面', F:'正面', D:'底面', L:'左面', B:'背面' };
+const CAL_ORDER = ['F','R','B','L','U','D'];
+const CAL_HOW = {
+  F:'方塊正拿，「正面」對著鏡頭，頂部朝上。',
+  R:'把方塊向左轉 90°（原本右邊那面轉到前面），頂部仍朝上。',
+  B:'再向左轉 90°，原本的背面對著鏡頭，頂部仍朝上。',
+  L:'再向左轉 90°，原本的左面對著鏡頭，頂部仍朝上。',
+  U:'回到正面朝鏡頭，再把頂部往鏡頭方向倒下：上面對著鏡頭，原本的背面在畫面上方。',
+  D:'回到正面朝鏡頭，把底部往鏡頭方向翻起：底面對著鏡頭，原本的正面在畫面上方。'
+};
+const CELL = 100, FACE_PX = 300;
+const T = { dupDiff: 0.06, tex: 0.035, fit: 0.42, motion: 0.022, stableFrames: 6, dupSim: 0.6, dupSameId: 0.8 };
+
+// ---------------- state ----------------
+const S = {
+  mode: 'scan',            // scan | calib | solve
+  calib: null,             // {faces:{U:dataURL..}, names:{}, demo:bool}
+  ref: null, refFaceCanvas: {}, refCells: [],
+  caps: [],                // {canvas, patches, id}
+  capFace: [],             // display face index for each cap
+  calibSlots: {}, calibRot: {}, calibCur: 'F',
+  facing: 'user', stream: null, srcImg: null, imgT: { s: 1, x: 0, y: 0 },
+  stable: 0, prevPatches: null, cooldown: false, lastCapIdx: -1,
+  solution: null, step: 0, playing: false, animating: false,
+  live: { fit: 1, id: null },
+  method: 'jigsaw', jf: {}, jres: null,
+};
+let db = null, canWrite = false;
+const store = { get(k){ try { return localStorage.getItem(k); } catch(e){ return null; } }, set(k,v){ try { localStorage.setItem(k,v); return true; } catch(e){ return false; } } };
+
+// ---------------- helpers ----------------
+function toast(t, ms){ const d=document.createElement('div'); d.className='toast'; d.textContent=t; document.body.appendChild(d); setTimeout(()=>d.remove(), ms||1800); }
+function busy(on, text){ $('busy').hidden=!on; if(text) $('busyText').textContent=text; }
+const sleep = ms => new Promise(r=>setTimeout(r,ms));
+function loadImg(src){ return new Promise((res,rej)=>{ const i=new Image(); i.onload=()=>res(i); i.onerror=rej; i.src=src; }); }
+function canvasOf(w,h){ const c=document.createElement('canvas'); c.width=w; c.height=h; return c; }
+function rotCanvasCW(src, k){ k=((k%4)+4)%4; let c=src; for(let i=0;i<k;i++){ const n=canvasOf(c.height,c.width); const x=n.getContext('2d'); x.translate(n.width,0); x.rotate(Math.PI/2); x.drawImage(c,0,0); c=n; } return c; }
+function cellCanvas(face, p, q){ const c=canvasOf(CELL,CELL); const x=c.getContext('2d'); x.drawImage(face,(p%3)*CELL,Math.floor(p/3)*CELL,CELL,CELL,0,0,CELL,CELL); return q? rotCanvasCW(c,q): c; }
+function patchesOfCanvas(c){ const d=c.getContext('2d').getImageData(0,0,c.width,c.height).data; return E.extractPatches(d,c.width,c.height,0,0,c.width); }
+function vibrate(ms){ try{ navigator.vibrate && navigator.vibrate(ms); }catch(e){} }
+function names(){ return (S.calib && S.calib.names) || DEFAULT_NAMES; }
+
+// ---------------- reference / calibration ----------------
+async function setCalibration(cal){
+  S.calib = cal; const pats=[]; S.refCells=[];
+  for (const f of F){
+    const img = await loadImg(cal.faces[f]); const c=canvasOf(FACE_PX,FACE_PX); c.getContext('2d').drawImage(img,0,0,FACE_PX,FACE_PX);
+    S.refFaceCanvas[f]=c; pats.push(...patchesOfCanvas(c)); for(let p=0;p<9;p++) S.refCells.push(cellCanvas(c,p,0));
+  }
+  S.ref = E.buildReference(pats);
+  $('demoBanner').hidden = !cal.demo || S.method!=='library';
+  $('calibInfo').textContent = cal.demo ? '目前狀態：使用示範圖案（用你傳來的照片暫代，掃描實體方塊前請先校正）。' : ('目前狀態：已校正' + (cal.updated? '（'+new Date(cal.updated).toLocaleString()+'）':'') + (cal.shared? '，所有人共用。':'，存在這台裝置。'));
+  renderRemain(); renderChips();
+}
+async function loadCalibration(){
+  let cal=null;
+  const raw = store.get('pc_calib_v1'); if(raw){ try{ cal=JSON.parse(raw); }catch(e){} }
+  if(!cal) cal = { faces: DEMO_FACES, names: Object.assign({},DEFAULT_NAMES), demo: true };
+  await setCalibration(cal);
+  // shared calibration (when hosted as a Claude artifact with a database)
+  try {
+    if (window.claude && window.claude.use) {
+      db = await window.claude.use('db');
+      const user = await window.claude.use('user');
+      canWrite = user ? (user.canEdit ? user.canEdit() : false) : false;
+      if (db) {
+        const snap = await db.collection('calib').get();
+        if (!snap.empty) {
+          const faces={}, nm={}; let upd=0;
+          snap.docs.forEach(d=>{ const v=d.data()||{}; if(F.includes(d.id)&&v.img){ faces[d.id]=v.img; nm[d.id]=v.name||DEFAULT_NAMES[d.id]; upd=Math.max(upd,v.updated||0);} });
+          if (F.every(f=>faces[f])) await setCalibration({faces,names:nm,updated:upd,shared:true});
+        }
+      }
+    }
+  } catch(e){ console.warn('db', e); }
+}
+async function saveCalibration(cal){
+  cal.updated = Date.now();
+  store.set('pc_calib_v1', JSON.stringify(cal));
+  if (db && canWrite) {
+    try { for (const f of F) await db.doc('calib/'+f).set({ img: cal.faces[f], name: cal.names[f], updated: cal.updated }); cal.shared = true; }
+    catch(e){ console.warn(e); toast('已存在這台裝置（共用儲存失敗）'); }
+  }
+  await setCalibration(cal);
+}
+
+// ---------------- 3D cube ----------------
+const R3 = {};
+function blankTexture(){ const c=canvasOf(64,64), x=c.getContext('2d'); x.fillStyle='#3a4154'; x.fillRect(0,0,64,64); x.fillStyle='#4a5268'; x.font='bold 28px sans-serif'; x.textAlign='center'; x.textBaseline='middle'; x.fillText('?',32,34); return c; }
+function initThree(){
+  const st=$('stage');
+  const renderer=new THREE.WebGLRenderer({antialias:true,alpha:true}); renderer.setPixelRatio(Math.min(2,window.devicePixelRatio||1));
+  st.insertBefore(renderer.domElement, st.firstChild);
+  const scene=new THREE.Scene(); const camera=new THREE.PerspectiveCamera(32,1,0.1,100);
+  camera.position.set(0,0,11.5);
+  scene.add(new THREE.AmbientLight(0xffffff,1));
+  const root=new THREE.Group(); scene.add(root);
+  root.quaternion.setFromEuler(new THREE.Euler(0.5,-0.62,0,'XYZ'));
+  Object.assign(R3,{renderer,scene,camera,root,cubies:{},stickers:{},blank:new THREE.CanvasTexture(blankTexture())});
+  // cubies
+  const body=new THREE.BoxGeometry(0.97,0.97,0.97); const bodyMat=new THREE.MeshBasicMaterial({color:0x0b0d12});
+  const plane=new THREE.PlaneGeometry(0.9,0.9);
+  for(let x=-1;x<=1;x++)for(let y=-1;y<=1;y++)for(let z=-1;z<=1;z++){
+    if(!x&&!y&&!z) continue; const g=new THREE.Group(); g.add(new THREE.Mesh(body,bodyMat)); root.add(g); R3.cubies[[x,y,z].join(',')]=g; g.position.set(x,y,z);
+  }
+  for(let fi=0;fi<54;fi++){
+    const f=F[Math.floor(fi/9)], p=E.slotPos(fi); const g=R3.cubies[p.join(',')];
+    const m=new THREE.Mesh(plane,new THREE.MeshBasicMaterial({map:R3.blank}));
+    const n=E.NRM[f], u=E.UPV[f], r=E.RGT[f];
+    const M=new THREE.Matrix4().makeBasis(new THREE.Vector3(...r),new THREE.Vector3(...u),new THREE.Vector3(...n));
+    m.quaternion.setFromRotationMatrix(M); m.position.set(n[0]*0.488,n[1]*0.488,n[2]*0.488);
+    g.add(m); R3.stickers[fi]=m;
+  }
+  // drag to rotate
+  let drag=null;
+  st.addEventListener('pointerdown',e=>{ drag={x:e.clientX,y:e.clientY}; st.setPointerCapture(e.pointerId); });
+  st.addEventListener('pointermove',e=>{ if(!drag) return; const dx=e.clientX-drag.x, dy=e.clientY-drag.y; drag={x:e.clientX,y:e.clientY};
+    const q=new THREE.Quaternion().setFromEuler(new THREE.Euler(dy*0.01,dx*0.01,0,'XYZ')); root.quaternion.premultiply(q); });
+  const end=()=>drag=null; st.addEventListener('pointerup',end); st.addEventListener('pointercancel',end);
+  const resize=()=>{ const w=st.clientWidth,h=st.clientHeight; renderer.setSize(w,h,false); camera.aspect=w/h; camera.updateProjectionMatrix(); };
+  new ResizeObserver(resize).observe(st); resize();
+  const loop=()=>{ renderer.render(scene,camera); requestAnimationFrame(loop); }; loop();
+}
+function texOf(canvas, q){ const t=new THREE.CanvasTexture(canvas); if(q){ t.center.set(0.5,0.5); t.rotation=-q*Math.PI/2; } return t; }
+function resetCubies(){ for(const k in R3.cubies){ const g=R3.cubies[k]; const p=k.split(',').map(Number); g.position.set(p[0],p[1],p[2]); g.quaternion.identity(); } }
+function setSticker(fi, tex){ const m=R3.stickers[fi].material; if(m.map && m.map!==R3.blank) m.map.dispose(); m.map=tex||R3.blank; m.needsUpdate=true; }
+// scan view: stickers at their home slots show captured cells
+function showScanCube(){
+  if(S.method==='jigsaw') return jShowScanCube();
+  resetCubies();
+  const shown={};
+  S.caps.forEach((c,i)=>{ const f=S.capFace[i]; shown[f]=1; for(let p=0;p<9;p++) setSticker(f*9+p, texOf(cellCanvas(c.canvas,p,0),0)); });
+  for(let f=0;f<6;f++) if(!shown[f]) for(let p=0;p<9;p++) setSticker(f*9+p,null);
+}
+// piece view: home stickers carry reference images; cubies placed according to state
+function showStateCube(state){
+  for(let fi=0;fi<54;fi++) setSticker(fi, texOf(S.refCells[fi],0));
+  placeCubies(state);
+}
+function placeCubies(state){
+  for(const st of state){
+    const home=E.slotPos(st.id); if(st.id%9===4 && false) continue;
+    const f=F[Math.floor(st.id/9)]; const n0=E.NRM[f], u0=E.UPV[f];
+    const c0=cross(n0,u0), c1=cross(st.n,st.up);
+    const A=new THREE.Matrix4().makeBasis(new THREE.Vector3(...st.n),new THREE.Vector3(...st.up),new THREE.Vector3(...c1));
+    const B=new THREE.Matrix4().makeBasis(new THREE.Vector3(...n0),new THREE.Vector3(...u0),new THREE.Vector3(...c0));
+    const M=A.multiply(B.transpose());
+    const g=R3.cubies[home.join(',')]; g.quaternion.setFromRotationMatrix(M); g.position.set(st.pos[0],st.pos[1],st.pos[2]);
+  }
+}
+function cross(a,b){ return [a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]]; }
+function animateMove(state, face, k, ms){
+  return new Promise(res=>{
+    const ax=E.NRM[face]; const axis=new THREE.Vector3(...ax);
+    const pivot=new THREE.Group(); R3.root.add(pivot);
+    const moving=new Set(); for(const st of state){ if(st.pos[0]*ax[0]+st.pos[1]*ax[1]+st.pos[2]*ax[2]===1) moving.add(E.slotPos(st.id).join(',')); }
+    moving.forEach(k2=>pivot.attach(R3.cubies[k2]));
+    const kk=((k%4)+4)%4; const angle = kk===3 ? Math.PI/2 : -kk*Math.PI/2;
+    const t0=performance.now(); const reduce=window.matchMedia('(prefers-reduced-motion: reduce)').matches; const dur=reduce?0:ms;
+    const tick=()=>{ const t=dur? Math.min(1,(performance.now()-t0)/dur):1; const e=t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;
+      pivot.quaternion.setFromAxisAngle(axis, angle*e);
+      if(t<1) requestAnimationFrame(tick); else { moving.forEach(k2=>R3.root.attach(R3.cubies[k2])); R3.root.remove(pivot); E.applyMove(state,face,k); placeCubies(state); res(); } };
+    tick();
+  });
+}
+
+// ---------------- chips / remaining ----------------
+function renderChips(){
+  if(S.method==='jigsaw' && S.mode!=='calib') return jRenderChips();
+  const el=$('chips'); el.innerHTML='';
+  if(S.mode==='calib'){
+    CAL_ORDER.forEach(f=>{ const b=document.createElement('button'); b.className='chip'+(S.calibSlots[f]?' done':'')+(S.calibCur===f?' next':'');
+      if(S.calibSlots[f]){ const c=rotCanvasCW(S.calibSlots[f],S.calibRot[f]||0); c.style.width='100%'; b.appendChild(c); }
+      const l=document.createElement('span'); l.className='lbl'; l.textContent=FACE_CN[f]; b.appendChild(l);
+      b.onclick=()=>{ S.calibCur=f; renderCalib(); spinToFace(F.indexOf(f)); }; el.appendChild(b); });
+    return;
+  }
+  for(let i=0;i<6;i++){
+    const b=document.createElement('button'); const cap=S.caps[i]; b.className='chip'+(cap?' done':'')+(!cap&&i===S.caps.length?' next':'');
+    b.setAttribute('aria-label', cap? '第'+(i+1)+'面，點一下重拍':'第'+(i+1)+'面（尚未掃描）');
+    if(cap){ const c=canvasOf(60,60); c.getContext('2d').drawImage(cap.canvas,0,0,60,60); b.appendChild(c); b.onclick=()=>removeCap(i); }
+    else { b.textContent=(i+1); }
+    el.appendChild(b);
+  }
+}
+function renderRemain(){
+  if(S.method==='jigsaw' && S.mode==='scan') return jRenderRemain();
+  const el=$('remain'); el.innerHTML='';
+  if(S.mode!=='scan' || !S.ref){ return; }
+  const done=new Set(S.capFace); const left=[0,1,2,3,4,5].filter(f=>!done.has(f));
+  if(!left.length){ el.textContent='6 面都掃好了，按「下一步：解鎖」。'; return; }
+  const t=document.createElement('span'); t.textContent='還沒掃的面，中間格是：'; el.appendChild(t);
+  left.forEach(f=>{ const c=canvasOf(52,52); c.getContext('2d').drawImage(S.refCells[f*9+4],0,0,52,52); c.title=names()[F[f]]; el.appendChild(c); });
+}
+function updateProgress(){
+  if(S.method==='jigsaw' && S.mode==='scan') return jUpdateProgress();
+  $('stageBadge').textContent = S.mode==='calib' ? '校正 '+Object.keys(S.calibSlots).length+' / 6' : S.caps.length+' / 6';
+  $('btnNext').disabled = S.caps.length<6;
+  $('btnUndo').disabled = S.caps.length===0;
+}
+
+// ---------------- camera & viewport ----------------
+const cam=$('cam'), ctx=cam.getContext('2d',{willReadFrequently:true}); let video=null;
+function guideRect(){ const w=cam.width,h=cam.height; const s=Math.round(Math.min(w,h)*0.66); return { x:Math.round((w-s)/2), y:Math.round((h-s)/2), s }; }
+function layoutGuide(){
+  const vp=$('viewport'); const dpr=Math.min(2,window.devicePixelRatio||1);
+  cam.width=Math.round(vp.clientWidth*dpr); cam.height=Math.round(vp.clientHeight*dpr);
+  const g=guideRect(); const gd=$('guide'); gd.style.left=(g.x/dpr)+'px'; gd.style.top=(g.y/dpr)+'px'; gd.style.width=(g.s/dpr)+'px'; gd.style.height=(g.s/dpr)+'px';
+}
+async function startCamera(){
+  stopCamera();
+  $('camMsg').hidden=true; S.srcImg=null; $('zoomBar').hidden=true;
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ return camFail('這個瀏覽器不支援直接開相機。'); }
+  try{
+    S.stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:S.facing, width:{ideal:1280}, height:{ideal:1280} }, audio:false });
+    video=document.createElement('video'); video.playsInline=true; video.muted=true; video.setAttribute('playsinline',''); video.srcObject=S.stream; await video.play();
+    cam.classList.toggle('mirror', S.facing==='user');
+    if(S.mode==='calib') setStatus('對準後按「手動擷取」'); else if(S.method==='jigsaw') jStatusIdle(); else setStatus('把方塊的任一面放進框內');
+  }catch(e){ console.warn(e); camFail(e && e.name==='NotAllowedError' ? '相機權限被拒絕，或這個頁面所在的環境不允許使用相機。' : '無法開啟相機（'+(e&&e.name||e)+'）。'); }
+}
+function camFail(msg){
+  const m=$('camMsg'); m.hidden=false; m.innerHTML='';
+  const h=document.createElement('b'); h.textContent=msg; m.appendChild(h);
+  const p=document.createElement('p'); p.textContent='可以改用下面的「拍照 / 選照片」：每一面拍一張照片，再把照片對齊方框擷取。若要即時掃描，請用 https 網址（例如 GitHub Pages）開啟這個網頁。'; m.appendChild(p);
+  const b=document.createElement('button'); b.className='btn primary'; b.style.flex='0 0 auto'; b.textContent='拍照 / 選照片'; b.onclick=()=>$('filePhoto').click(); m.appendChild(b);
+  const b2=document.createElement('button'); b2.className='btn small'; b2.textContent='再試一次開相機'; b2.onclick=startCamera; m.appendChild(b2);
+  setStatus('');
+}
+function stopCamera(){ if(S.stream){ S.stream.getTracks().forEach(t=>t.stop()); S.stream=null; } video=null; }
+function drawFrame(){
+  const w=cam.width,h=cam.height; if(!w||!h) return false;
+  if(S.srcImg){
+    const im=S.srcImg, t=S.imgT; const base=Math.max(w/im.width,h/im.height)*t.s;
+    ctx.fillStyle='#000'; ctx.fillRect(0,0,w,h);
+    ctx.drawImage(im, (w-im.width*base)/2 + t.x, (h-im.height*base)/2 + t.y, im.width*base, im.height*base); return true;
+  }
+  if(video && video.readyState>=2){
+    const vw=video.videoWidth, vh=video.videoHeight; const sc=Math.max(w/vw,h/vh);
+    ctx.drawImage(video,(w-vw*sc)/2,(h-vh*sc)/2,vw*sc,vh*sc); return true;
+  }
+  return false;
+}
+function setStatus(main, sub){ const s=$('status'); s.textContent=main||''; if(sub){ const sm=document.createElement('small'); sm.textContent=sub; s.appendChild(sm);} }
+function setRing(frac, color){ const a=$('ringArc'); a.setAttribute('stroke-dashoffset', String(113*(1-Math.max(0,Math.min(1,frac))))); if(color) a.setAttribute('stroke',color); }
+
+// region around guide (for analysis + refinement)
+function grabRegion(){
+  const g=guideRect(); const pad=Math.round(g.s*0.18);
+  const x=Math.max(0,g.x-pad), y=Math.max(0,g.y-pad), w=Math.min(cam.width-x,g.s+2*pad), h=Math.min(cam.height-y,g.s+2*pad);
+  const d=ctx.getImageData(x,y,w,h).data; return { d, w, h, box:{ x:g.x-x, y:g.y-y, s:g.s }, ox:x, oy:y };
+}
+function patchMotion(a,b){ if(!a||!b) return 1; let s=0,n=0; for(let i=0;i<9;i++){ const A=a[i].data,B=b[i].data; for(let j=0;j<A.length;j+=3){ s+=Math.abs(A[j]-B[j])+Math.abs(A[j+1]-B[j+1]); n+=2; } } return s/n; }
+
+// live analysis loop
+let lastTick=0;
+function frameLoop(t){
+  requestAnimationFrame(frameLoop);
+  if(S.mode==='solve') return;
+  if(!drawFrame()) return;
+  if(t-lastTick<110) return; lastTick=t;
+  if(S.srcImg) { setRing(0); return; }
+  const reg=grabRegion(); const pats=E.extractPatches(reg.d,reg.w,reg.h,reg.box.x,reg.box.y,reg.box.s);
+  const motion=patchMotion(pats,S.prevPatches); S.prevPatches=pats;
+  if(S.mode==='calib'){ $('guide').className = motion<T.motion?'ready':''; return; }
+  if(S.method==='jigsaw'){ if(S.mode==='scan') jTick(pats, motion); return; }
+  if(!S.ref || S.caps.length>=6 || S.capturing) return;
+  const id=E.identifyFace(S.ref,pats); S.live={fit:id.fit,id};
+  const tex=E.texture(pats); const present=id.fit<T.fit && tex>T.tex; S.live.tex=tex;
+  if(S.cooldown){
+    // wait until the user shows something else
+    if(!present){ S.cooldownAway=(S.cooldownAway||0)+1; } else if(motion>T.motion*2){ S.cooldownAway=(S.cooldownAway||0)+1; }
+    if(S.cooldownAway>=3){ S.cooldown=false; S.cooldownAway=0; }
+    setRing(0); $('guide').className='ok'; return;
+  }
+  if(present && motion<T.motion) S.stable++; else S.stable=0;
+  const frac=S.stable/T.stableFrames; setRing(frac, '#c9a45c'); $('guide').className = present ? 'ready':'';
+  if(!present) setStatus('把方塊的一面放進框內', S.caps.length? '轉到還沒掃的那一面':'正面對鏡頭、塞滿方框');
+  else if(S.stable<T.stableFrames) setStatus('保持不動…', '對準九宮格線');
+  if($('optAuto').checked && S.stable>=T.stableFrames){ S.stable=0; captureNow(true); }
+}
+
+async function captureNow(auto){
+  if(S.capturing) return; S.capturing=true;
+  try{
+    if(!drawFrame()){ toast('還沒有畫面'); return; }
+    const reg=grabRegion();
+    if(S.mode==='calib'){
+      const c=canvasOf(FACE_PX,FACE_PX); c.getContext('2d').drawImage(cam, reg.ox+reg.box.x, reg.oy+reg.box.y, reg.box.s, reg.box.s, 0,0,FACE_PX,FACE_PX);
+      S.calibSlots[S.calibCur]=c; S.calibRot[S.calibCur]=0; vibrate(40);
+      const i=CAL_ORDER.indexOf(S.calibCur); const nxt=CAL_ORDER.find((f,j)=>j>i && !S.calibSlots[f]) || CAL_ORDER.find(f=>!S.calibSlots[f]);
+      if(nxt) S.calibCur=nxt; renderCalib(); spinToFace(F.indexOf(S.calibCur)); return;
+    }
+    if(S.method==='jigsaw'){ await jCapture(reg, auto); return; }
+    if(!S.ref) return;
+    setStatus('擷取中…'); setRing(1,'#86c39a');
+    await sleep(10);
+    const rf=E.refineBox(S.ref, reg.d, reg.w, reg.h, reg.box);
+    const c=canvasOf(FACE_PX,FACE_PX); c.getContext('2d').drawImage(cam, reg.ox+rf.box.x, reg.oy+rf.box.y, rf.box.s, rf.box.s, 0,0,FACE_PX,FACE_PX);
+    addCapture(c, auto);
+  } finally { S.capturing=false; }
+}
+function addCapture(canvas, auto){
+  const pats=patchesOfCanvas(canvas); const id=E.identifyFace(S.ref,pats);
+  if(id.fit > T.fit*1.5 || E.texture(pats) < T.tex){ setStatus('看不太出是方塊的一面','請靠近一點、讓方塊塞滿方框，光線亮一點'); if(!auto) toast('沒有對準方塊，請再試一次'); S.cooldown=auto; return false; }
+  // duplicate?
+  for(let i=0;i<S.caps.length;i++){
+    const sim=E.faceSimilarity(S.ref, pats, S.caps[i].patches);
+    if(sim<T.dupSim || (S.caps[i].id.face===id.face && sim<T.dupSameId)){
+      setStatus('這一面已經掃過了','請轉到還沒掃的那一面'); setRing(1,'#e3a95d'); S.cooldown=true; vibrate([20,40,20]);
+      if(!auto) toast('這一面已經掃過了'); return false;
+    }
+  }
+  S.caps.push({canvas, patches:pats, id}); assignFaces();
+  vibrate(60); S.cooldown=true; S.lastCapIdx=S.caps.length-1;
+  setStatus('✓ 已擷取第 '+S.caps.length+' 面', S.caps.length<6? '請轉到下一面':'全部完成！'); setRing(1,'#86c39a');
+  showScanCube(); spinToFace(S.capFace[S.caps.length-1]); renderChips(); renderRemain(); updateProgress();
+  if(S.caps.length===6) toast('6 面都完成了，按「下一步：解鎖」');
+  return true;
+}
+function assignFaces(){
+  // which physical face (by centre image) each capture is — global assignment
+  const C=S.caps.map(c=>c.id.scores);
+  if(!C.length){ S.capFace=[]; return; }
+  const n=C.length; const M=[]; for(let i=0;i<6;i++){ M.push(i<n? C[i].slice(): new Array(6).fill(0)); }
+  S.capFace=E.hungarian(M).assign.slice(0,n);
+}
+function removeCap(i){ S.caps.splice(i,1); assignFaces(); showScanCube(); renderChips(); renderRemain(); updateProgress(); S.cooldown=false; setStatus('已移除，請重新掃描這一面'); }
+function spinToFace(f){
+  if(f==null) return; const n=new THREE.Vector3(...E.NRM[F[f]]);
+  const target=new THREE.Quaternion().setFromUnitVectors(n, new THREE.Vector3(0.35,0.3,1).normalize());
+  const from=R3.root.quaternion.clone(); const t0=performance.now();
+  const tick=()=>{ const t=Math.min(1,(performance.now()-t0)/500); R3.root.quaternion.copy(from).slerp(target,t); if(t<1) requestAnimationFrame(tick); }; tick();
+}
+
+// ---------------- photo upload ----------------
+$('btnPhoto').onclick=()=>$('filePhoto').click();
+$('filePhoto').onchange=async e=>{
+  const f=e.target.files[0]; e.target.value=''; if(!f) return;
+  const url=URL.createObjectURL(f); const img=await loadImg(url);
+  stopCamera(); S.srcImg=img; S.imgT={s:1,x:0,y:0}; $('zoom').value=1; $('zoomBar').hidden=false; $('camMsg').hidden=true; cam.classList.remove('mirror');
+  setStatus('拖曳 / 縮放照片，讓方塊對齊方框', '對好後按「手動擷取」');
+};
+(function(){ const vp=$('viewport'); let d=null;
+  vp.addEventListener('pointerdown',e=>{ if(!S.srcImg) return; d={x:e.clientX,y:e.clientY}; vp.setPointerCapture(e.pointerId); });
+  vp.addEventListener('pointermove',e=>{ if(!d) return; const dpr=cam.width/vp.clientWidth; S.imgT.x+=(e.clientX-d.x)*dpr; S.imgT.y+=(e.clientY-d.y)*dpr; d={x:e.clientX,y:e.clientY}; });
+  vp.addEventListener('pointerup',()=>d=null); vp.addEventListener('pointercancel',()=>d=null);
+  $('zoom').oninput=e=>{ S.imgT.s=+e.target.value; };
+})();
+
+// ---------------- buttons: scan ----------------
+$('btnCapture').onclick=()=>captureNow(false);
+$('btnFlip').onclick=()=>{ S.facing = S.facing==='user'?'environment':'user'; startCamera(); };
+$('btnUndo').onclick=()=>{ if(S.method==='jigsaw'){ const last=[...J_ORDER].reverse().find(f=>S.jf[f]); if(last){ delete S.jf[last]; S.cooldown=false; jShowScanCube(); jRenderChips(); jRenderRemain(); jUpdateProgress(); spinToFace(F.indexOf(last)); jStatusIdle(); } return; } if(S.caps.length) removeCap(S.caps.length-1); };
+$('btnNext').onclick=()=> S.method==='jigsaw' ? doJigsaw() : doSolve();
+$('demoBanner').onclick=()=>openCalib();
+
+// ---------------- solve ----------------
+async function doSolve(){
+  if(S.caps.length<6) return;
+  busy(true,'辨識方塊狀態…'); await sleep(30);
+  let rec;
+  try{ rec=E.reconstruct(S.ref, S.caps.map(c=>({patches:c.patches}))); }catch(e){ busy(false); console.error(e); toast('辨識失敗：'+e.message); return; }
+  S.rec=rec;
+  if(!rec.valid){
+    busy(false);
+    // find worst face
+    const per=[0,0,0,0,0,0]; rec.perSticker.forEach((v,i)=>per[Math.floor(i/9)]+=v);
+    const wf=per.indexOf(Math.max(...per)); const ci=rec.capOfFace[wf];
+    toast('有一面可能拍得不清楚，請重拍標示的那一面', 3500);
+    setStatus('辨識不一致：請重拍第 '+(ci+1)+' 面', '光線均勻、正對鏡頭、塞滿方框');
+    const chip=$('chips').children[ci]; if(chip) chip.classList.add('next');
+    return;
+  }
+  busy(true,'計算最少步數的解法…'); await sleep(30);
+  let sol;
+  try{
+    const st=E.cloneState(rec.state);
+    if($('optCenters').checked) sol=E.solve(st, window.min2phase, {timeMs:1800});
+    else { const s=window.min2phase.solve(E.toFacelets(st)); sol={ moves:E.parseAlg(s), verified:E.isSolved(E.applyAlg(E.cloneState(st),s),false), base:E.parseAlg(s).length, fix:0 }; }
+  }catch(e){ console.error(e); sol={error:String(e)}; }
+  busy(false);
+  if(!sol || sol.error){ toast('解法計算失敗：'+(sol&&sol.error)); return; }
+  S.solution=sol; S.step=0; S.startState=E.cloneState(rec.state); S.curState=E.cloneState(rec.state);
+  enterSolve();
+}
+function enterSolve(){
+  S.mode='solve'; stopCamera();
+  $('scanArea').hidden=true; $('scanArea').style.display='none'; $('solve').hidden=false; $('st1').className=''; $('st2').className='on';
+  $('stageHint').textContent='上方是你手上方塊的樣子，可拖曳旋轉對照'; $('demoBanner').hidden=true;
+  showStateCube(S.curState); R3.root.quaternion.setFromEuler(new THREE.Euler(0.5,-0.62,0,'XYZ'));
+  const nm=names(); const hold=$('hold'); hold.innerHTML='';
+  const mk=f=>{ const c=canvasOf(68,68); c.getContext('2d').drawImage(S.refCells[F.indexOf(f)*9+4],0,0,68,68); return c; };
+  hold.appendChild(mk('F')); hold.appendChild(mk('U'));
+  const t=document.createElement('div'); t.innerHTML=''; const b=document.createElement('b'); b.textContent='拿法：'; t.appendChild(b);
+  t.appendChild(document.createTextNode('中間格是第一張圖的面（'+nm.F+'）朝向你，第二張圖的面（'+nm.U+'）朝上，整個過程不要換方向。'));
+  hold.appendChild(t);
+  const sol=S.solution;
+  $('solveNote').className='note '+(sol.verified?'ok':'bad');
+  $('solveNote').textContent = (sol.verified? '已用模擬驗證：照著轉完會完全還原。':'警告：驗證未通過。') + ' 共 '+sol.moves.length+' 步' + ($('optCenters').checked && sol.fix? '（其中約 '+(sol.moves.length - Math.min(sol.base, sol.moves.length))+' 步用來把中心格的圖轉正）':'') + '。';
+  renderMoves(); updateUndoSolve();
+}
+function moveText(f,k){
+  const nm=names(); k=((k%4)+4)%4;
+  const dir = k===1?'順時針轉 90°':k===3?'逆時針轉 90°':'轉 180°';
+  return { big:E.fmtMove(f,k), main:'把「'+FACE_CN[f]+'」面（'+nm[f]+'）'+dir, sub:'方向以「正對著那一面」來看；只轉那一層。' };
+}
+function renderMoves(){
+  const el=$('moves'); el.innerHTML='';
+  S.solution.moves.forEach(([f,k],i)=>{ const s=document.createElement('span'); s.textContent=E.fmtMove(f,k); s.className=i<S.step?'done':i===S.step?'cur':''; s.onclick=()=>jumpTo(i); el.appendChild(s); });
+  const cur=el.children[S.step]; if(cur) cur.scrollIntoView({block:'nearest',inline:'center',behavior:'smooth'});
+  const mv=S.solution.moves[S.step];
+  if(mv){ const t=moveText(mv[0],mv[1]); $('mvBig').textContent=t.big; $('mvDesc').innerHTML=''; $('mvDesc').append(t.main); const sm=document.createElement('small'); sm.textContent='第 '+(S.step+1)+' / '+S.solution.moves.length+' 步　'+t.sub; $('mvDesc').appendChild(sm); }
+  else { $('mvBig').textContent='✓'; $('mvDesc').textContent='完成！方塊已解鎖還原。'; }
+  $('stageBadge').textContent = S.step+' / '+S.solution.moves.length;
+  updateUndoSolve();
+}
+function updateUndoSolve(){ $('btnPrev').disabled=S.step===0||S.animating; $('btnStep').disabled=S.step>=S.solution.moves.length||S.animating; }
+async function stepFwd(){ if(S.animating||S.step>=S.solution.moves.length) return false; S.animating=true; updateUndoSolve(); const [f,k]=S.solution.moves[S.step]; await animateMove(S.curState,f,k,520); S.step++; S.animating=false; renderMoves(); if(S.step===S.solution.moves.length){ vibrate([60,60,120]); toast('解鎖完成！'); } return true; }
+async function stepBack(){ if(S.animating||S.step===0) return; S.animating=true; updateUndoSolve(); S.step--; const [f,k]=S.solution.moves[S.step]; await animateMove(S.curState,f,(4-k)%4,420); S.animating=false; renderMoves(); }
+async function jumpTo(i){ if(S.animating) return; S.playing=false; $('btnPlay').textContent='▶ 自動播放'; S.curState=E.applyAlg(E.cloneState(S.startState), S.solution.moves.slice(0,i)); S.step=i; placeCubies(S.curState); renderMoves(); }
+$('btnStep').onclick=stepFwd; $('btnPrev').onclick=stepBack;
+$('btnPlay').onclick=async()=>{ if(S.playing){ S.playing=false; $('btnPlay').textContent='▶ 自動播放'; return; } S.playing=true; $('btnPlay').textContent='❚❚ 暫停'; while(S.playing && await stepFwd()) await sleep(700); S.playing=false; $('btnPlay').textContent='▶ 自動播放'; };
+$('btnRestart').onclick=()=>jumpTo(0);
+$('btnRescan').onclick=()=>backToScan();
+
+// ---------------- calibration ----------------
+function setCalibUI(on){
+  $('calibBar').hidden=!on; $('rowCalib').hidden=!on; $('demoBanner').hidden = on || !(S.calib&&S.calib.demo); $('rowScan').hidden=on; $('remain').hidden=on;
+  $('st1').textContent = on ? '校正中' : '① 掃描';
+}
+function openCalib(){
+  $('sheetSettings').hidden=true; S.mode='calib'; S.calibSlots={}; S.calibRot={}; S.calibCur='F';
+  S.calibNames=Object.assign({}, names()); setCalibUI(true);
+  if(!S.stream && !S.srcImg) startCamera();
+  renderCalib(); spinToFace(F.indexOf('F'));
+}
+function renderCalib(){
+  const f=S.calibCur;
+  $('calibStep').textContent = '請拿一顆「已還原」的方塊。現在拍「'+FACE_CN[f]+'」面：'+CAL_HOW[f]+' 對準方框後按「手動擷取」。';
+  $('calibName').value=S.calibNames[f]; $('btnCalRot').disabled=!S.calibSlots[f];
+  setStatus('校正：拍「'+FACE_CN[f]+'」面', '已完成 '+Object.keys(S.calibSlots).length+' / 6，下方小圖可點選重拍');
+  $('btnCalibSave').disabled = Object.keys(S.calibSlots).length<6; updateProgress(); renderChips();
+  resetCubies();
+  for(let fi=0;fi<54;fi++){ const ff=F[Math.floor(fi/9)]; const c=S.calibSlots[ff]; setSticker(fi, c? texOf(cellCanvas(rotCanvasCW(c,S.calibRot[ff]||0),fi%9,0),0): null); }
+}
+$('calibName').oninput=e=>{ S.calibNames[S.calibCur]=e.target.value; };
+$('btnCalRot').onclick=()=>{ const f=S.calibCur; S.calibRot[f]=((S.calibRot[f]||0)+1)%4; renderCalib(); spinToFace(F.indexOf(f)); };
+$('btnCalib').onclick=openCalib;
+function exitCalib(){ S.mode='scan'; setCalibUI(false); showScanCube(); renderChips(); updateProgress(); renderRemain(); setStatus('把方塊的任一面放進框內'); }
+$('btnCalibCancel').onclick=exitCalib;
+$('btnCalibSave').onclick=async()=>{
+  const faces={}; for(const f of F){ faces[f]=rotCanvasCW(S.calibSlots[f],S.calibRot[f]||0).toDataURL('image/jpeg',0.86); }
+  busy(true,'儲存校正…'); await saveCalibration({faces, names:Object.assign({},S.calibNames)}); busy(false);
+  S.caps=[]; S.capFace=[]; exitCalib(); toast('校正完成，可以開始掃描打亂的方塊了', 2600);
+};
+
+// ---------------- settings ----------------
+$('btnSettings').onclick=()=>{ $('sheetSettings').hidden=false; };
+$('btnCloseSettings').onclick=()=>$('sheetSettings').hidden=true;
+$('sheetSettings').addEventListener('click',e=>{ if(e.target.id==='sheetSettings') $('sheetSettings').hidden=true; });
+$('btnExport').onclick=async()=>{
+  if(!S.calib) return; const blob=new Blob([JSON.stringify({faces:S.calib.faces,names:S.calib.names})],{type:'application/json'});
+  if(window.claude && window.claude.use){ try{ const dl=await window.claude.use('downloads'); if(dl){ await dl.save({filename:'cube-calibration.json', data:blob}); return; } }catch(e){ if(e&&e.code!=='unavailable'){ toast('沒有匯出'); return; } } }
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='cube-calibration.json'; document.body.appendChild(a); a.click(); a.remove();
+};
+$('btnImport').onclick=()=>$('fileImport').click();
+$('fileImport').onchange=async e=>{ const f=e.target.files[0]; e.target.value=''; if(!f) return; try{ const j=JSON.parse(await f.text()); if(!F.every(x=>j.faces&&j.faces[x])) throw new Error('格式不對'); await saveCalibration({faces:j.faces,names:j.names||DEFAULT_NAMES}); toast('已匯入校正檔'); }catch(err){ toast('匯入失敗：'+err.message); } };
+// simulated test: scramble the reference cube and feed synthetic photos through the real pipeline
+$('btnSim').onclick=async()=>{
+  $('sheetSettings').hidden=true; if(S.mode!=='scan') return;
+  if(S.method==='jigsaw') return jSimulate();
+  S.caps=[]; S.capFace=[]; showScanCube();
+  const sc=Array.from({length:25},()=>'URFDLB'[Math.random()*6|0]+['',"'",'2'][Math.random()*3|0]).join(' ');
+  const st=E.applyAlg(E.solvedState(),sc); const m=E.bySlot(st);
+  const order=[0,1,2,3,4,5].sort(()=>Math.random()-.5);
+  for(const f of order){
+    const c=canvasOf(FACE_PX,FACE_PX), x=c.getContext('2d');
+    for(let p=0;p<9;p++){ const s=m[f*9+p]; const q=E.qOf(F[f],s.up); x.drawImage(cellCanvas(S.refFaceCanvas[F[Math.floor(s.id/9)]], s.id%9, q), (p%3)*CELL, Math.floor(p/3)*CELL); }
+    let r=rotCanvasCW(c, Math.random()*4|0); const g=0.75+Math.random()*0.5; const id=r.getContext('2d').getImageData(0,0,FACE_PX,FACE_PX); for(let i=0;i<id.data.length;i+=4){ for(let ch=0;ch<3;ch++) id.data[i+ch]=Math.min(255,id.data[i+ch]*g*(0.92+0.16*Math.random())); } r.getContext('2d').putImageData(id,0,0);
+    addCapture(r,false); await sleep(380);
+  }
+  toast('模擬打亂：'+sc.split(' ').length+' 步，按「下一步：解鎖」看解法', 3000);
+};
+
+// =============== AUTO-JIGSAW MODE (default) ===============
+const J_ORDER = ['F','R','B','L','U','D'];
+const J_HOW = {
+  F:'任選一面當「正面」對著鏡頭，記住哪一面朝上。',
+  R:'把方塊向左轉 90°（原本右邊那面轉過來），頂部仍朝上。',
+  B:'再向左轉 90°，頂部仍朝上。',
+  L:'再向左轉 90°，頂部仍朝上。',
+  U:'轉回「正面」對鏡頭，再把頂部往鏡頭方向倒下，讓上面對著鏡頭。',
+  D:'轉回「正面」對鏡頭，再把底部往鏡頭方向翻起，讓底面對著鏡頭。'
+};
+const J_NAMES = { F:'前', R:'右', B:'後', L:'左', U:'上', D:'下' };
+function jNext(){ return J_ORDER.find(f=>!S.jf[f]) || null; }
+function jCount(){ return J_ORDER.filter(f=>S.jf[f]).length; }
+function jRenderChips(){
+  const el=$('chips'); el.innerHTML=''; const nx=jNext();
+  J_ORDER.forEach(f=>{
+    const b=document.createElement('button'); const d=S.jf[f]; b.className='chip'+(d?' done':'')+(f===nx?' next':'');
+    b.setAttribute('aria-label', J_NAMES[f]+'面'+(d?'（點一下微調或重拍）':'（尚未掃描）'));
+    if(d){ const c=canvasOf(60,60); c.getContext('2d').drawImage(d.face,0,0,60,60); b.appendChild(c); b.onclick=()=>openAdjust(f); }
+    const l=document.createElement('span'); l.className='lbl'; l.textContent=J_NAMES[f]; b.appendChild(l);
+    el.appendChild(b);
+  });
+}
+function jRenderRemain(){
+  const el=$('remain'); el.innerHTML=''; const nx=jNext();
+  el.textContent = nx ? ('第 '+(jCount()+1)+' 面「'+J_NAMES[nx]+'」：'+J_HOW[nx]) : '6 面都掃好了。點上方小圖可微調；沒問題就按「下一步：拼圖解鎖」。';
+}
+function jStatusIdle(){ const nx=jNext(); if(nx) setStatus('掃描「'+J_NAMES[nx]+'」面', '格線對準貼紙之間的縫，停住就會自動拍'); else setStatus('6 面完成', '按「下一步：拼圖解鎖」'); }
+function jShowScanCube(){
+  resetCubies();
+  for(let fi=0;fi<54;fi++){ const f=F[Math.floor(fi/9)]; const d=S.jf[f]; setSticker(fi, d? texOf(cellCanvas(d.face,fi%9,0),0): null); }
+}
+function jUpdateProgress(){
+  $('stageBadge').textContent = jCount()+' / 6';
+  $('btnNext').disabled = jCount()<6; $('btnUndo').disabled = jCount()===0;
+  $('btnNext').textContent='下一步：拼圖解鎖';
+}
+// perspective: unit square -> quad (TL,TR,BR,BL)
+function sq2quad(q){
+  const [x0,y0]=q[0],[x1,y1]=q[1],[x2,y2]=q[2],[x3,y3]=q[3];
+  const dx1=x1-x2, dx2=x3-x2, dx3=x0-x1+x2-x3, dy1=y1-y2, dy2=y3-y2, dy3=y0-y1+y2-y3;
+  let a,b,c,d,e,f,g,h;
+  if(Math.abs(dx3)<1e-9 && Math.abs(dy3)<1e-9){ a=x1-x0; b=x2-x1; c=x0; d=y1-y0; e=y2-y1; f=y0; g=0; h=0; }
+  else { const den=dx1*dy2-dx2*dy1; g=(dx3*dy2-dx2*dy3)/den; h=(dx1*dy3-dx3*dy1)/den; a=x1-x0+g*x1; b=x3-x0+h*x3; c=x0; d=y1-y0+g*y1; e=y3-y0+h*y3; f=y0; }
+  return (u,v)=>{ const w=g*u+h*v+1; return [(a*u+b*v+c)/w,(d*u+e*v+f)/w]; };
+}
+function warpFace(src, quad, size){
+  size=size||FACE_PX; const sw=src.width, sh=src.height; const sd=src.getContext('2d').getImageData(0,0,sw,sh).data;
+  const out=canvasOf(size,size), ox=out.getContext('2d'), id=ox.createImageData(size,size), od=id.data; const m=sq2quad(quad);
+  for(let y=0;y<size;y++) for(let x=0;x<size;x++){
+    const [sx,sy]=m((x+0.5)/size,(y+0.5)/size); const ix=Math.max(0,Math.min(sw-2,sx-0.5)), iy=Math.max(0,Math.min(sh-2,sy-0.5));
+    const x0=ix|0, y0=iy|0, fx=ix-x0, fy=iy-y0, o=(y*size+x)*4;
+    for(let c=0;c<3;c++){ const i00=(y0*sw+x0)*4+c; od[o+c]=(sd[i00]*(1-fx)+sd[i00+4]*fx)*(1-fy)+(sd[i00+sw*4]*(1-fx)+sd[i00+sw*4+4]*fx)*fy; }
+    od[o+3]=255;
+  }
+  ox.putImageData(id,0,0); return out;
+}
+function boxQuad(b){ return [[b.x,b.y],[b.x+b.s,b.y],[b.x+b.s,b.y+b.s],[b.x,b.y+b.s]]; }
+function faceDiff(A,B){ // mean abs difference of two captured faces, best over 4 rotations
+  let best=1; for(let k=0;k<4;k++){ let s=0,n=0; for(let p=0;p<9;p++){ let b=B[p]; for(let i=0;i<k;i++) b=E.rotPatchCW(b); const a=A[E.capPos(p,k)].data; for(let i=0;i<a.length;i++){ s+=Math.abs(a[i]-b.data[i]); n++; } } best=Math.min(best,s/n); } return best;
+}
+function jSetFace(f, src, quad){
+  const face=warpFace(src, quad, FACE_PX);
+  S.jf[f]={src, quad, face, patches:patchesOfCanvas(face)};
+}
+async function jCapture(reg, auto){
+  const f=jNext(); if(!f){ toast('6 面都拍好了'); return; }
+  setStatus('擷取中…'); setRing(1,'#86c39a'); await sleep(10);
+  // copy the analysed region (guide + margin) so the face can be re-cropped later
+  const src=canvasOf(reg.w,reg.h); src.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(reg.d), reg.w, reg.h),0,0);
+  const al=E.alignGrid(reg.d, reg.w, reg.h, reg.box);
+  const quad=boxQuad(al.box);
+  const face=warpFace(src, quad, FACE_PX); const pats=patchesOfCanvas(face);
+  if(E.texture(pats)<T.tex){ setStatus('框裡看不到方塊','把方塊的一面放進框內'); if(!auto) toast('沒有看到方塊'); S.cooldown=auto; return; }
+  // same as the previous face? (user forgot to turn)
+  const prev=J_ORDER.filter(x=>S.jf[x]).map(x=>S.jf[x]);
+  if(prev.some(p=>faceDiff(pats,p.patches)<T.dupDiff)){ setStatus('這一面剛剛拍過了', J_HOW[f]); setRing(1,'#e3a95d'); S.cooldown=true; vibrate([20,40,20]); if(!auto) toast('這一面已經拍過'); return; }
+  S.jf[f]={src, quad, face, patches:pats};
+  vibrate(60); S.cooldown=true;
+  const nx=jNext(); setStatus('✓ 「'+J_NAMES[f]+'」面完成', nx? ('下一面「'+J_NAMES[nx]+'」：'+J_HOW[nx]) : '全部完成！');
+  jShowScanCube(); jRenderChips(); jRenderRemain(); jUpdateProgress(); if(nx) spinToFace(F.indexOf(nx)); else toast('6 面完成，按「下一步：拼圖解鎖」');
+}
+function jTick(pats, motion){
+  if(!jNext() || S.capturing) { setRing(0); return; }
+  const tex=E.texture(pats); const present=tex>T.tex;
+  if(S.cooldown){ if(!present || motion>T.motion*2) S.cooldownAway=(S.cooldownAway||0)+1; if(S.cooldownAway>=3){ S.cooldown=false; S.cooldownAway=0; } setRing(0); $('guide').className='ok'; return; }
+  if(present && motion<T.motion) S.stable++; else S.stable=0;
+  setRing(S.stable/T.stableFrames,'#c9a45c'); $('guide').className=present?'ready':'';
+  if(!present) jStatusIdle(); else if(S.stable<T.stableFrames) setStatus('保持不動…','格線對準貼紙之間的縫');
+  if($('optAuto').checked && S.stable>=T.stableFrames){ S.stable=0; captureNow(true); }
+}
+// ---- adjust sheet: drag 4 corners ----
+let ADJ=null;
+function openAdjust(f){
+  const d=S.jf[f]; if(!d) return; ADJ={f, quad:d.quad.map(p=>p.slice()), src:d.src};
+  $('adjTitle').textContent='微調「'+J_NAMES[f]+'」面'; $('sheetAdj').hidden=false; drawAdjust();
+}
+function adjGeom(){ const c=$('adjCanvas'); const s=Math.max(ADJ.src.width,ADJ.src.height); return { k:c.width/s, ox:(c.width-ADJ.src.width*c.width/s)/2, oy:(c.height-ADJ.src.height*c.width/s)/2 }; }
+function drawAdjust(){
+  const c=$('adjCanvas'), x=c.getContext('2d'); const g=adjGeom();
+  x.fillStyle='#000'; x.fillRect(0,0,c.width,c.height); x.drawImage(ADJ.src,g.ox,g.oy,ADJ.src.width*g.k,ADJ.src.height*g.k);
+  const P=ADJ.quad.map(([px,py])=>[g.ox+px*g.k,g.oy+py*g.k]); const m=sq2quad(P);
+  x.strokeStyle='rgba(201,164,92,.95)'; x.lineWidth=3;
+  for(let i=0;i<=3;i++){ x.beginPath(); for(let t=0;t<=10;t++){ const [a,b]=m(i/3,t/10); t?x.lineTo(a,b):x.moveTo(a,b);} x.stroke(); x.beginPath(); for(let t=0;t<=10;t++){ const [a,b]=m(t/10,i/3); t?x.lineTo(a,b):x.moveTo(a,b);} x.stroke(); }
+  // handles (positioned in CSS px)
+  const wrap=$('adjWrap'); wrap.querySelectorAll('.handle').forEach(h=>h.remove()); const cs=wrap.clientWidth/c.width;
+  P.forEach(([a,b],i)=>{ const h=document.createElement('div'); h.className='handle'; h.style.left=(a*cs)+'px'; h.style.top=(b*cs)+'px'; h.dataset.i=i; wrap.appendChild(h); });
+  const pv=$('adjPreview'); pv.getContext('2d').drawImage(warpFace(ADJ.src, ADJ.quad, 150),0,0);
+  const px=pv.getContext('2d'); px.strokeStyle='rgba(201,164,92,.9)'; px.lineWidth=1; for(const t of [50,100]){ px.beginPath(); px.moveTo(t,0); px.lineTo(t,150); px.moveTo(0,t); px.lineTo(150,t); px.stroke(); }
+}
+(function(){
+  const wrap=$('adjWrap'); let drag=-1;
+  wrap.addEventListener('pointerdown',e=>{ const h=e.target.closest('.handle'); if(!h) return; drag=+h.dataset.i; wrap.setPointerCapture(e.pointerId); e.preventDefault(); });
+  wrap.addEventListener('pointermove',e=>{ if(drag<0) return; const r=wrap.getBoundingClientRect(); const c=$('adjCanvas'); const g=adjGeom(); const cx=(e.clientX-r.left)*c.width/r.width, cy=(e.clientY-r.top)*c.height/r.height;
+    ADJ.quad[drag]=[(cx-g.ox)/g.k,(cy-g.oy)/g.k]; drawAdjust(); });
+  const up=()=>{ drag=-1; }; wrap.addEventListener('pointerup',up); wrap.addEventListener('pointercancel',up);
+})();
+$('btnAdjRot').onclick=()=>{ const q=ADJ.quad; ADJ.quad=[q[3],q[0],q[1],q[2]]; drawAdjust(); };
+$('btnAdjRetake').onclick=()=>{ delete S.jf[ADJ.f]; $('sheetAdj').hidden=true; S.cooldown=false; jShowScanCube(); jRenderChips(); jRenderRemain(); jUpdateProgress(); spinToFace(F.indexOf(ADJ.f)); jStatusIdle(); toast('請重拍「'+J_NAMES[ADJ.f]+'」面（注意拿的方向）'); };
+$('btnAdjDone').onclick=()=>{ jSetFace(ADJ.f, ADJ.src, ADJ.quad); $('sheetAdj').hidden=true; jShowScanCube(); jRenderChips(); };
+$('sheetAdj').addEventListener('click',e=>{ if(e.target.id==='sheetAdj') $('sheetAdj').hidden=true; });
+
+// ---- solving in a background worker ----
+let WORKER=null;
+function getWorker(){
+  if(WORKER) return WORKER;
+  try{
+    const src = $('srcM2P').textContent + '\n' + $('srcEngine').textContent + '\n' + `
+self.onmessage = function(e){
+  try{
+    const d=e.data; const cells=d.cells.map(c=>({S:c.S,data:new Float32Array(c.data)}));
+    const t0=Date.now(); const r=CubeEngine.jigsaw(cells, d.opts); const t1=Date.now();
+    let sol=null;
+    if(r.valid){ if(d.centers){ sol=CubeEngine.solve(r.state, min2phase, {timeMs:1500}); } else { const s=min2phase.solve(CubeEngine.toFacelets(r.state)); const mv=CubeEngine.parseAlg(s); sol={moves:mv, base:mv.length, fix:0, verified:CubeEngine.isSolved(CubeEngine.applyAlg(CubeEngine.cloneState(r.state),s),false)}; } }
+    self.postMessage({ok:true, state:r.state, homeImgCap:r.homeImgCap, valid:r.valid, score:r.score, faceRot:r.faceRot, sol, ms:[t1-t0, Date.now()-t1]});
+  }catch(err){ self.postMessage({ok:false, error:String(err&&err.stack||err)}); }
+};`;
+    WORKER=new Worker(URL.createObjectURL(new Blob([src],{type:'application/javascript'})));
+  }catch(e){ console.warn('worker unavailable', e); WORKER=null; }
+  return WORKER;
+}
+function runJigsaw(payload){
+  return new Promise((res)=>{
+    const w=getWorker();
+    if(!w){ // main-thread fallback
+      setTimeout(()=>{ try{ const r=E.jigsaw(payload.cells.map(c=>({S:c.S,data:new Float32Array(c.data)})), payload.opts); let sol=null; if(r.valid) sol=E.solve(r.state, window.min2phase, {timeMs:1500}); res({ok:true,state:r.state,homeImgCap:r.homeImgCap,valid:r.valid,score:r.score,faceRot:r.faceRot,sol}); }catch(err){ res({ok:false,error:String(err)}); } },30);
+      return;
+    }
+    w.onmessage=e=>res(e.data); w.onerror=e=>res({ok:false,error:e.message||'worker error'});
+    w.postMessage(payload);
+  });
+}
+function jCells(){
+  const boxes=[]; const c3=FACE_PX/3; for(let r=0;r<3;r++)for(let c=0;c<3;c++) boxes.push({x0:c*c3,x1:(c+1)*c3,y0:r*c3,y1:(r+1)*c3});
+  const cells=[];
+  for(const f of F){ const fc=S.jf[f].face; const d=fc.getContext('2d').getImageData(0,0,FACE_PX,FACE_PX).data; cells.push(...E.cellsFromBoxes(d,FACE_PX,FACE_PX,boxes,48)); }
+  return cells;
+}
+async function doJigsaw(){
+  if(jCount()<6) return;
+  busy(true,'自動拼圖中…（約 5～20 秒）'); const t0=Date.now(); const tick=setInterval(()=>{ $('busyText').textContent='自動拼圖中… '+Math.round((Date.now()-t0)/1000)+' 秒'; },500);
+  const cells=jCells();
+  const res=await runJigsaw({ cells: cells.map(c=>({S:c.S,data:Array.from(c.data)})), opts:{ rotSearch:[0,3], timeMs:2400 }, centers: $('optCenters').checked });
+  clearInterval(tick); busy(false);
+  if(!res.ok){ console.error(res.error); toast('拼圖失敗：'+res.error.slice(0,80), 4000); return; }
+  S.jres=res;
+  // assembled picture cells: home facelet -> captured cell (rotated)
+  S.refCells = res.homeImgCap.map(id=>{ const sf=id>>2, rot=id&3; return cellCanvas(S.jf[F[Math.floor(sf/9)]].face, sf%9, rot); });
+  showPreview();
+}
+function showPreview(){
+  S.mode='preview'; stopCamera(); $('scanArea').hidden=true; $('scanArea').style.display='none'; $('preview').hidden=false; $('preview').style.display='flex';
+  const el=$('pvPics'); el.innerHTML='';
+  J_ORDER.forEach(f=>{ const fi=F.indexOf(f); const c=canvasOf(FACE_PX,FACE_PX), x=c.getContext('2d'); for(let p=0;p<9;p++) x.drawImage(S.refCells[fi*9+p],(p%3)*CELL,Math.floor(p/3)*CELL); const fig=document.createElement('figure'); fig.appendChild(c); const cap=document.createElement('figcaption'); cap.textContent=J_NAMES[f]+'面'; fig.appendChild(cap); el.appendChild(fig); });
+  const res=S.jres; const rotNote = res.faceRot && (res.faceRot[0]||res.faceRot[3]) ? '（已自動修正上/下面拿的方向）' : '';
+  $('pvNote').className='note '+(res.valid?'':'bad');
+  $('pvNote').textContent = res.valid ? ('程式拼出來的 6 張圖如下'+rotNote+'。圖案看起來對，就按「正確，開始解鎖」；上方 3D 也可以轉來看。') : '拼不出合理的結果。請檢查每一面的格線有沒有對準（點掃描頁的小圖可微調），或重拍。';
+  $('btnPvOk').disabled = !res.valid || !res.sol;
+  showStateCube(E.solvedState()); $('stageHint').textContent='這是還原後的樣子'; $('stageBadge').textContent='預覽';
+}
+$('btnPvOk').onclick=()=>{
+  const res=S.jres; S.solution={ moves:res.sol.moves, verified:res.sol.verified, base:res.sol.base, fix:res.sol.fix };
+  S.step=0; S.startState=E.cloneState(res.state); S.curState=E.cloneState(res.state);
+  $('preview').hidden=true; $('preview').style.display='none'; enterSolve();
+};
+$('btnPvBack').onclick=()=>backToScan();
+function backToScan(){
+  S.playing=false; S.mode='scan'; $('solve').hidden=true; $('preview').hidden=true; $('preview').style.display='none'; $('scanArea').hidden=false; $('scanArea').style.display='flex'; $('st1').className='on'; $('st2').className=''; $('stageHint').textContent='拖曳可旋轉方塊';
+  $('demoBanner').hidden=!(S.method==='library'&&S.calib&&S.calib.demo);
+  requestAnimationFrame(()=>{ layoutGuide(); showScanCube(); updateProgress(); renderChips(); renderRemain(); startCamera(); });
+}
+// simulated test for jigsaw mode: scramble the demo pictures and fake the 6 guided scans
+async function jSimulate(){
+  const pics=await Promise.all(DEMO_PICS.map(loadImg));
+  const faceCv=pics.map(im=>{ const c=canvasOf(FACE_PX,FACE_PX); c.getContext('2d').drawImage(im,0,0,FACE_PX,FACE_PX); return c; });
+  const sc=Array.from({length:25},()=>'URFDLB'[Math.random()*6|0]+['',"'",'2'][Math.random()*3|0]).join(' ');
+  const stT=E.applyAlg(E.solvedState(),sc); S.simTruth={fac:E.toFacelets(stT), cr:E.centerRots(stT).join(',')}; const m=E.bySlot(stT); S.jf={}; jShowScanCube(); jRenderChips();
+  for(const f of J_ORDER){
+    const fi=F.indexOf(f); const c=canvasOf(FACE_PX,FACE_PX), x=c.getContext('2d'); x.fillStyle='#111'; x.fillRect(0,0,FACE_PX,FACE_PX);
+    for(let p=0;p<9;p++){ const s=m[fi*9+p]; const q=E.qOf(F[fi],s.up); const cell=cellCanvas(faceCv[Math.floor(s.id/9)], s.id%9, q); x.drawImage(cell,3,3,CELL-6,CELL-6,(p%3)*CELL+3,Math.floor(p/3)*CELL+3,CELL-6,CELL-6); }
+    let r = (f==='U'||f==='D') ? rotCanvasCW(c, Math.random()*4|0) : c;   // users often hold top/bottom rotated
+    const g=0.8+Math.random()*0.4; const id=r.getContext('2d').getImageData(0,0,FACE_PX,FACE_PX); for(let i=0;i<id.data.length;i+=4) for(let ch=0;ch<3;ch++) id.data[i+ch]=Math.min(255,id.data[i+ch]*g); r.getContext('2d').putImageData(id,0,0);
+    S.jf[f]={src:r, quad:boxQuad({x:0,y:0,s:FACE_PX}), face:r, patches:patchesOfCanvas(r)};
+    jShowScanCube(); jRenderChips(); jRenderRemain(); jUpdateProgress(); spinToFace(fi); await sleep(350);
+  }
+  toast('模擬打亂完成，按「下一步：拼圖解鎖」', 3000);
+}
+function setMethod(m){
+  S.method=m; store.set('pc_method',m); $('mJigsaw').checked=m==='jigsaw'; $('mLibrary').checked=m==='library';
+  $('demoBanner').hidden=!(m==='library'&&S.calib&&S.calib.demo);
+  $('btnNext').textContent = m==='jigsaw' ? '下一步：拼圖解鎖' : '下一步：解鎖';
+  if(S.mode==='scan'){ showScanCube(); renderChips(); renderRemain(); updateProgress(); if(m==='jigsaw') jStatusIdle(); }
+}
+$('mJigsaw').onchange=()=>setMethod('jigsaw'); $('mLibrary').onchange=()=>setMethod('library');
+
+
+// ---------------- boot ----------------
+(async function boot(){
+  initThree(); layoutGuide(); new ResizeObserver(layoutGuide).observe($('viewport'));
+  S.method = store.get('pc_method') || 'jigsaw';
+  await loadCalibration();
+  setMethod(S.method);
+  renderChips(); updateProgress(); showScanCube();
+  requestAnimationFrame(frameLoop);
+  startCamera();
+  setTimeout(()=>{ try{ window.min2phase.solve(window.min2phase.randomCube()); }catch(e){} }, 1500); // warm up solver tables
+})();
+window.__app = S;
+})();
+</script>
