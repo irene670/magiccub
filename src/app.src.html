@@ -115,10 +115,27 @@ header h1 small{font-family:var(--f-body);font-weight:500;font-size:12px;color:v
 .seg b{display:block;font-size:14px}
 @media (prefers-reduced-motion:reduce){.spin{animation:none}}
 @media (max-height:640px){#stage{height:30vh}.steps{display:none}}
-body.scanning #stage{height:min(20vh,180px)}
+body.scanning #stage{height:min(20vh,180px);transition:height .3s}
+body.scanning.turning #stage{height:min(34vh,300px)}
+body.turning #stageHint{display:none}
 body.scanning .chips{padding-block:6px;gap:5px}
 body.scanning .chip{border-radius:8px}
 body.scanning #viewport{min-height:min(52vh,460px)}
+#gprog{position:absolute;inset:-3px;width:calc(100% + 6px);height:calc(100% + 6px);overflow:visible}
+#gprog rect{stroke:var(--gold);stroke-dasharray:100;stroke-dashoffset:100;transition:stroke-dashoffset .15s linear}
+#guide.armed{border-color:rgba(239,231,214,.5)}
+#reviewPane{position:absolute;inset:0;background:var(--wall);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:12px}
+#reviewCanvas{width:min(78%,300px);aspect-ratio:1;height:auto;border-radius:10px;border:2px solid var(--gold)}
+#reviewMsg{font-size:14px;text-align:center;line-height:1.5;max-width:30em}
+#reviewMsg small{display:block;color:var(--muted);font-size:12px}
+#reviewMsg.warn{color:var(--warn)}
+#turnHint{position:absolute;left:50%;bottom:10px;white-space:nowrap;transform:translateX(-50%);display:flex;align-items:center;gap:8px;background:rgba(17,20,28,.82);border:1px solid var(--gold);color:var(--gold);border-radius:14px;padding:6px 12px 6px 8px;font-weight:700;font-size:14px;max-width:calc(100% - 24px);z-index:2}
+#turnHint span{color:var(--paper);line-height:1.4}
+#turnHint svg{flex:none;animation:spinArrow 1.4s ease-in-out infinite}
+#turnHint.flipx svg{transform:scaleX(-1)}
+#turnHint.up svg{transform:rotate(-90deg)}
+#turnHint.down svg{transform:rotate(90deg)}
+@keyframes spinArrow{0%,100%{opacity:.55}50%{opacity:1}}
 #burst{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);display:flex;gap:5px;pointer-events:none}
 #burst i{width:9px;height:9px;border-radius:50%;background:rgba(239,231,214,.35);display:block}
 #burst i.on{background:var(--gold)}
@@ -137,6 +154,7 @@ body.scanning #viewport{min-height:min(52vh,460px)}
     <div id="demoBanner" hidden>尚未校正：目前用示範圖案。點這裡開始校正 →</div>
     <div id="stageBadge">0 / 6</div>
     <div id="stageHint">拖曳可旋轉方塊</div>
+    <div id="turnHint" hidden><svg viewBox="0 0 64 64" width="44" height="44" aria-hidden="true"><path id="turnArrow" d="M50 30a18 18 0 1 0-6 14" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round"/><path d="M38 44l7 1 1-7" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg><span id="turnText"></span></div>
   </div>
 
   <div class="chips" id="chips"></div>
@@ -146,7 +164,8 @@ body.scanning #viewport{min-height:min(52vh,460px)}
     <div id="scanArea" style="display:flex;flex-direction:column;gap:8px;flex:1 1 auto;min-height:0">
       <div id="viewport">
         <canvas id="cam"></canvas>
-        <div id="guide"></div>
+        <div id="guide"><svg id="gprog" viewBox="0 0 100 100" preserveAspectRatio="none"><rect x="1" y="1" width="98" height="98" rx="4" pathLength="100" fill="none" stroke-width="2.4" vector-effect="non-scaling-stroke"/></svg></div>
+        <div id="reviewPane" hidden><canvas id="reviewCanvas" width="300" height="300"></canvas><div id="reviewMsg"></div></div>
         <svg id="ring" viewBox="0 0 44 44"><circle cx="22" cy="22" r="18" fill="rgba(17,20,28,.55)" stroke="rgba(239,231,214,.25)" stroke-width="4"/><circle id="ringArc" cx="22" cy="22" r="18" fill="none" stroke="#c9a45c" stroke-width="4" stroke-linecap="round" stroke-dasharray="113" stroke-dashoffset="113" transform="rotate(-90 22 22)"/></svg>
         <div id="status">準備相機中…</div>
         <div id="burst" aria-hidden="true"></div>
@@ -166,6 +185,15 @@ body.scanning #viewport{min-height:min(52vh,460px)}
         <button class="btn" id="btnPhoto">拍照 / 選照片</button>
         <button class="btn" id="btnCapture">手動擷取</button>
         <button class="btn small ghost" id="btnFlip" aria-label="切換前後鏡頭">⇄ 鏡頭</button>
+      </div>
+      <div class="row" id="rowReview" hidden>
+        <button class="btn ghost" id="btnRvRetake">重拍</button>
+        <button class="btn" id="btnRvAdjust">微調格線</button>
+        <button class="btn primary" id="btnRvOk">✓ 這面 OK</button>
+      </div>
+      <div class="row" id="rowTurn" hidden>
+        <button class="btn" id="btnTurnReplay">再看一次怎麼轉</button>
+        <button class="btn primary" id="btnTurnGo">轉好了，開始拍</button>
       </div>
       <div class="row" id="rowScan">
         <button class="btn ghost" id="btnUndo">重拍上一面</button>
@@ -264,7 +292,7 @@ const CAL_HOW = {
   D:'回到正面朝鏡頭，把底部往鏡頭方向翻起：底面對著鏡頭，原本的正面在畫面上方。'
 };
 const CELL = 100, FACE_PX = 300;
-const T = { burstNeed: 5, burstMaxMotion: 0.25, dupDiff: 0.06, tex: 0.035, fit: 0.42, motion: 0.022, stableFrames: 6, dupSim: 0.6, dupSameId: 0.8 };
+const T = { newFace: 0.07, faceNeed: 8, burstNeed: 5, burstMaxMotion: 0.25, dupDiff: 0.06, tex: 0.035, fit: 0.42, motion: 0.022, stableFrames: 6, dupSim: 0.6, dupSameId: 0.8 };
 
 // ---------------- state ----------------
 const S = {
@@ -274,7 +302,7 @@ const S = {
   caps: [],                // {canvas, patches, id}
   capFace: [],             // display face index for each cap
   calibSlots: {}, calibRot: {}, calibCur: 'F',
-  facing: 'user', stream: null, srcImg: null, imgT: { s: 1, x: 0, y: 0 },
+  facing: 'environment', stream: null, srcImg: null, imgT: { s: 1, x: 0, y: 0 },
   stable: 0, prevPatches: null, cooldown: false, lastCapIdx: -1,
   solution: null, step: 0, playing: false, animating: false,
   live: { fit: 1, id: null },
@@ -341,6 +369,7 @@ async function saveCalibration(cal){
 
 // ---------------- 3D cube ----------------
 const R3 = {};
+function targetTexture(){ const c=canvasOf(64,64), x=c.getContext('2d'); x.fillStyle='#c9a45c'; x.fillRect(0,0,64,64); x.fillStyle='#1b1608'; x.font='bold 30px sans-serif'; x.textAlign='center'; x.textBaseline='middle'; x.fillText('★',32,34); return c; }
 function blankTexture(){ const c=canvasOf(64,64), x=c.getContext('2d'); x.fillStyle='#3a4154'; x.fillRect(0,0,64,64); x.fillStyle='#4a5268'; x.font='bold 28px sans-serif'; x.textAlign='center'; x.textBaseline='middle'; x.fillText('?',32,34); return c; }
 function initThree(){
   const st=$('stage');
@@ -351,7 +380,7 @@ function initThree(){
   scene.add(new THREE.AmbientLight(0xffffff,1));
   const root=new THREE.Group(); scene.add(root);
   root.quaternion.setFromEuler(new THREE.Euler(0.5,-0.62,0,'XYZ'));
-  Object.assign(R3,{renderer,scene,camera,root,cubies:{},stickers:{},blank:new THREE.CanvasTexture(blankTexture())});
+  Object.assign(R3,{renderer,scene,camera,root,cubies:{},stickers:{},blank:new THREE.CanvasTexture(blankTexture()), target:new THREE.CanvasTexture(targetTexture())});
   // cubies
   const body=new THREE.BoxGeometry(0.97,0.97,0.97); const bodyMat=new THREE.MeshBasicMaterial({color:0x0b0d12});
   const plane=new THREE.PlaneGeometry(0.9,0.9);
@@ -378,7 +407,7 @@ function initThree(){
 }
 function texOf(canvas, q){ const t=new THREE.CanvasTexture(canvas); if(q){ t.center.set(0.5,0.5); t.rotation=-q*Math.PI/2; } return t; }
 function resetCubies(){ for(const k in R3.cubies){ const g=R3.cubies[k]; const p=k.split(',').map(Number); g.position.set(p[0],p[1],p[2]); g.quaternion.identity(); } }
-function setSticker(fi, tex){ const m=R3.stickers[fi].material; if(m.map && m.map!==R3.blank) m.map.dispose(); m.map=tex||R3.blank; m.needsUpdate=true; }
+function setSticker(fi, tex){ const m=R3.stickers[fi].material; if(m.map && m.map!==R3.blank && m.map!==R3.target) m.map.dispose(); m.map=tex||R3.blank; m.needsUpdate=true; }
 // scan view: stickers at their home slots show captured cells
 function showScanCube(){
   if(S.method==='jigsaw') return jShowScanCube();
@@ -470,7 +499,7 @@ async function startCamera(){
     S.stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:S.facing, width:{ideal:1280}, height:{ideal:1280} }, audio:false });
     video=document.createElement('video'); video.playsInline=true; video.muted=true; video.setAttribute('playsinline',''); video.srcObject=S.stream; await video.play();
     cam.classList.toggle('mirror', S.facing==='user');
-    if(S.mode==='calib') setStatus('對準後按「手動擷取」'); else if(S.method==='jigsaw') jStatusIdle(); else setStatus('把方塊的任一面放進框內');
+    if(S.mode==='calib') setStatus('對準後按「手動擷取」'); else if(S.method==='jigsaw'){ if(!S.jstate||S.jstate==='scan') jStartFace(); } else setStatus('把方塊的任一面放進框內');
   }catch(e){ console.warn(e); camFail(e && e.name==='NotAllowedError' ? '相機權限被拒絕，或這個頁面所在的環境不允許使用相機。' : '無法開啟相機（'+(e&&e.name||e)+'）。'); }
 }
 function camFail(msg){
@@ -513,7 +542,7 @@ function frameLoop(t){
   if(S.mode==='solve') return;
   if(!drawFrame()) return;
   if(t-lastTick<85) return; lastTick=t;
-  if(S.srcImg) { setRing(0); return; }
+  if(S.srcImg && !S.srcLive) { setRing(0); return; }
   const reg=grabRegion(); const pats=E.extractPatches(reg.d,reg.w,reg.h,reg.box.x,reg.box.y,reg.box.s);
   const motion=patchMotion(pats,S.prevPatches); S.prevPatches=pats;
   if(S.mode==='calib'){ $('guide').className = motion<T.motion?'ready':''; return; }
@@ -545,7 +574,7 @@ async function captureNow(auto){
       const i=CAL_ORDER.indexOf(S.calibCur); const nxt=CAL_ORDER.find((f,j)=>j>i && !S.calibSlots[f]) || CAL_ORDER.find(f=>!S.calibSlots[f]);
       if(nxt) S.calibCur=nxt; renderCalib(); spinToFace(F.indexOf(S.calibCur)); return;
     }
-    if(S.method==='jigsaw'){ const fr=BURST.frames.length>=2? BURST.frames.map(b=>b.reg): [reg]; BURST.frames=[]; await jCapture(fr, auto); return; }
+    if(S.method==='jigsaw'){ if(S.jstate!=='scan') { if(S.jstate==='turn') jStartFace(); return; } const fr=BURST.frames.length>=2? BURST.frames.map(b=>b.reg): [reg]; const cms=BURST.frames.map(b=>b.cm); resetBurst(); await jFinishFace(fr, cms); return; }
     if(!S.ref) return;
     setStatus('擷取中…'); setRing(1,'#86c39a');
     await sleep(10);
@@ -605,7 +634,7 @@ $('filePhoto').onchange=async e=>{
 // ---------------- buttons: scan ----------------
 $('btnCapture').onclick=()=>captureNow(false);
 $('btnFlip').onclick=()=>{ S.facing = S.facing==='user'?'environment':'user'; startCamera(); };
-$('btnUndo').onclick=()=>{ if(S.method==='jigsaw'){ const last=[...J_ORDER].reverse().find(f=>S.jf[f]); if(last){ delete S.jf[last]; S.cooldown=false; jShowScanCube(); jRenderChips(); jRenderRemain(); jUpdateProgress(); spinToFace(F.indexOf(last)); jStatusIdle(); } return; } if(S.caps.length) removeCap(S.caps.length-1); };
+$('btnUndo').onclick=()=>{ if(S.method==='jigsaw'){ const last=[...J_ORDER].reverse().find(f=>S.jf[f]); if(last){ delete S.jf[last]; if(S.doneLive) delete S.doneLive[last]; S.jpending=null; jShowScanCube(); jRenderChips(); jRenderRemain(); jUpdateProgress(); jStartFace(); toast('請重拍「'+J_NAMES[last]+'」面'); } return; } if(S.caps.length) removeCap(S.caps.length-1); };
 $('btnNext').onclick=()=> S.method==='jigsaw' ? doJigsaw() : doSolve();
 $('demoBanner').onclick=()=>openCalib();
 
@@ -765,9 +794,9 @@ function jRenderRemain(){
   el.textContent = nx ? ('第 '+(jCount()+1)+' 面「'+J_NAMES[nx]+'」：'+J_HOW[nx]) : '6 面都掃好了。點上方小圖可微調；沒問題就按「下一步：拼圖解鎖」。';
 }
 function jStatusIdle(){ const nx=jNext(); if(nx) setStatus('掃描「'+J_NAMES[nx]+'」面', '放進框內就會自動連拍，輕微晃動沒關係'); else setStatus('6 面完成', '按「下一步：拼圖解鎖」'); }
-function jShowScanCube(){
-  resetCubies();
-  for(let fi=0;fi<54;fi++){ const f=F[Math.floor(fi/9)]; const d=S.jf[f]; setSticker(fi, d? texOf(cellCanvas(d.face,fi%9,0),0): null); }
+function jShowScanCube(pending){
+  resetCubies(); const tgt = S.mode==='scan' && (S.jstate==='turn'||S.jstate==='scan') ? jNext() : null;
+  for(let fi=0;fi<54;fi++){ const f=F[Math.floor(fi/9)]; const d=(pending&&pending.f===f)?pending:S.jf[f]; if(!d && f===tgt){ setSticker(fi, R3.target); continue; } setSticker(fi, d? texOf(cellCanvas(d.face,fi%9,0),0): null); }
 }
 function jUpdateProgress(){
   $('stageBadge').textContent = jCount()+' / 6';
@@ -803,58 +832,136 @@ function jSetFace(f, src, quad){
   S.jf[f]={src, quad, face, patches:patchesOfCanvas(face)};
 }
 // ---- burst capture: keep grabbing frames while the face is in view, then align + average them ----
-const BURST = { frames: [], miss: 0 };
-// coarse, shift-tolerant signature of a face: mean colour of each of the 9 stickers
+// ================= one face at a time (Face-ID style) =================
+// jstate: 'scan'  collect sharp frames of the CURRENT face until enough
+//         'review' frozen result, user confirms / retakes / adjusts
+//         'turn'   animation shows how to turn the cube; waits for a new face (or the button)
+const BURST = { frames: [], miss: 0, maxSharp: 0 };
 function cellMeans(pats){ return pats.map(p=>{ const m=[0,0,0], n=p.S*p.S; for(let i=0;i<n;i++){ m[0]+=p.data[i*3]; m[1]+=p.data[i*3+1]; m[2]+=p.data[i*3+2]; } return m.map(x=>x/n); }); }
 function coarseDiff(a,b,anyRot){ let best=1; for(let k=0;k<(anyRot?4:1);k++){ let s=0; for(let p=0;p<9;p++){ const A=a[E.capPos(p,k)], B=b[p]; s+=Math.abs(A[0]-B[0])+Math.abs(A[1]-B[1])+Math.abs(A[2]-B[2]); } best=Math.min(best,s/27); } return best; }
-function renderBurst(){ const el=$('burst'); let h=''; for(let i=0;i<T.burstNeed;i++) h+='<i class="'+(i<BURST.frames.length?'on':'')+'"></i>'; el.innerHTML = S.method==='jigsaw' && S.mode==='scan' && jNext() ? h : ''; }
-async function jCapture(regs, auto){
-  const f=jNext(); if(!f){ toast('6 面都拍好了'); return; }
-  setStatus('疊合 '+regs.length+' 張照片…'); setRing(1,'#86c39a'); await sleep(10);
+function renderBurst(){ $('burst').innerHTML=''; }
+function setFaceProgress(frac){ const r=$('gprog').querySelector('rect'); r.style.strokeDashoffset = String(100*(1-Math.max(0,Math.min(1,frac)))); r.style.opacity = frac>0 ? 1 : 0; }
+function setJState(st){
+  S.jstate=st; document.body.classList.toggle('turning', st==='turn' && S.method==='jigsaw');
+  const jig = S.method==='jigsaw' && S.mode==='scan';
+  $('rowReview').hidden = !(jig && st==='review');
+  $('rowTurn').hidden = !(jig && st==='turn');
+  $('reviewPane').hidden = !(jig && st==='review');
+  $('turnHint').hidden = !(jig && st==='turn');
+  if(st!=='scan') setFaceProgress(0);
+}
+function resetBurst(){ BURST.frames=[]; BURST.miss=0; BURST.maxSharp=0; setFaceProgress(0); }
+// --- whole-cube hold orientation for each scan step (what faces the camera) ---
+const VIEW_Q = ()=> new THREE.Quaternion().setFromEuler(new THREE.Euler(0.38,-0.48,0,'XYZ'));
+function holdQ(f){
+  const q=new THREE.Quaternion(); const X=new THREE.Vector3(1,0,0), Y=new THREE.Vector3(0,1,0);
+  if(f==='R') q.setFromAxisAngle(Y,-Math.PI/2); else if(f==='B') q.setFromAxisAngle(Y,Math.PI); else if(f==='L') q.setFromAxisAngle(Y,Math.PI/2);
+  else if(f==='U') q.setFromAxisAngle(X,Math.PI/2); else if(f==='D') q.setFromAxisAngle(X,-Math.PI/2);
+  return q;
+}
+function animateHold(path, ms){
+  // path: list of hold faces to pass through; rotates the 3D cube like the user's hands should
+  return new Promise(res=>{
+    let i=0; const step=()=>{
+      if(i>=path.length){ res(); return; }
+      const from=R3.root.quaternion.clone(), to=VIEW_Q().multiply(holdQ(path[i])); const t0=performance.now();
+      const tick=()=>{ const t=Math.min(1,(performance.now()-t0)/ms); const e=t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2; R3.root.quaternion.copy(from).slerp(to,e); if(t<1) requestAnimationFrame(tick); else { i++; setTimeout(step, 250); } };
+      tick();
+    }; step();
+  });
+}
+const TURN_NOTE='（金色★那面要轉到對著鏡頭）';
+const TURN = {
+  R:{ short:'整顆向左轉 90°', text:'整顆方塊向左轉 90°（右邊那面轉到正前方），頂部仍朝上', path:['R'], cls:'' },
+  B:{ short:'再向左轉 90°', text:'再向左轉 90°，頂部仍朝上', path:['B'], cls:'' },
+  L:{ short:'再向左轉 90°', text:'再向左轉 90°，頂部仍朝上', path:['L'], cls:'' },
+  U:{ short:'回正面 → 頂部往前倒', text:'先轉回最一開始的正面，再把頂部往前倒，讓上面對著鏡頭', path:['F','U'], cls:'down' },
+  D:{ short:'回正面 → 底部往前翻', text:'先轉回正面，再把底部往前翻，讓底面對著鏡頭', path:['F','D'], cls:'up' }
+};
+async function showTurn(nx){
+  const t=TURN[nx]; $('turnText').textContent=t.short+'　★ 轉到正前方'; $('turnHint').className=t.cls;
+  setStatus('請轉到「'+J_NAMES[nx]+'」面', t.text+TURN_NOTE);
+  R3.root.quaternion.copy(VIEW_Q().multiply(holdQ(J_ORDER[J_ORDER.indexOf(nx)-1])));
+  await sleep(300); await animateHold(t.path, 900);
+}
+function jStartFace(){
+  const nx=jNext(); resetBurst();
+  if(!nx){ setJState('done'); setStatus('6 面完成','按「下一步：拼圖解鎖」'); return; }
+  setJState('scan'); jShowScanCube(); R3.root.quaternion.copy(VIEW_Q().multiply(holdQ(nx)));
+  setStatus('掃描「'+J_NAMES[nx]+'」面', '把這一面放進框內，框線跑滿就完成');
+}
+// stack the collected frames of this face, then freeze for review
+async function jFinishFace(regs, cms){
+  const f=jNext(); if(!f) return;
+  setStatus('整理照片中…'); await sleep(10);
   const st = regs.length>1 ? E.stackFrames(regs.map(r=>({d:r.d,w:r.w,h:r.h}))) : {d:regs[0].d,w:regs[0].w,h:regs[0].h,used:1};
   const reg = { d: st.d, w: st.w, h: st.h, box: regs[0].box };
-  // keep the stacked region so the face can be re-cropped later
   const src=canvasOf(reg.w,reg.h); src.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(reg.d), reg.w, reg.h),0,0);
   const al=E.alignGrid(reg.d, reg.w, reg.h, reg.box);
-  const quad=boxQuad(al.box);
-  const face=warpFace(src, quad, FACE_PX); const pats=patchesOfCanvas(face);
-  if(E.texture(pats)<T.tex){ setStatus('框裡看不到方塊','把方塊的一面放進框內'); if(!auto) toast('沒有看到方塊'); S.cooldown=auto; return; }
-  const prev=J_ORDER.filter(x=>S.jf[x]).map(x=>S.jf[x]);
-  if(prev.some(p=>faceDiff(pats,p.patches)<T.dupDiff)){ setStatus('這一面剛剛拍過了', J_HOW[f]); setRing(1,'#e3a95d'); S.cooldown=true; S.lastPats=pats; S.lastMeans=cellMeans(pats); vibrate([20,40,20]); if(!auto) toast('這一面已經拍過'); return; }
-  S.jf[f]={src, quad, face, patches:pats, used:st.used};
-  vibrate(60); S.cooldown=true; S.lastPats=pats; S.lastMeans=cellMeans(pats);
-  const nx=jNext(); setStatus('✓ 「'+J_NAMES[f]+'」面完成（疊合 '+st.used+' 張）', nx? ('下一面「'+J_NAMES[nx]+'」：'+J_HOW[nx]) : '全部完成！');
-  jShowScanCube(); jRenderChips(); jRenderRemain(); jUpdateProgress(); renderBurst(); if(nx) spinToFace(F.indexOf(nx)); else toast('6 面完成，按「下一步：拼圖解鎖」');
+  S.jpending={ f, src, quad:boxQuad(al.box), used:st.used, live: cms && cms.length ? cms[Math.floor(cms.length/2)] : null };
+  showReview();
 }
+function showReview(){
+  const P=S.jpending; const face=warpFace(P.src, P.quad, FACE_PX); P.face=face; P.patches=patchesOfCanvas(face);
+  const c=$('reviewCanvas'), x=c.getContext('2d'); x.drawImage(face,0,0,300,300); x.strokeStyle='rgba(201,164,92,.85)'; x.lineWidth=2; for(const t of [100,200]){ x.beginPath(); x.moveTo(t,0); x.lineTo(t,300); x.moveTo(0,t); x.lineTo(300,t); x.stroke(); }
+  const prev=J_ORDER.filter(g=>S.jf[g]&&g!==P.f);
+  const dup=prev.find(g=>faceDiff(P.patches,S.jf[g].patches)<T.dupDiff*1.3);
+  const m=$('reviewMsg'); m.className=dup?'warn':''; m.innerHTML='';
+  m.append(dup ? ('這面看起來跟「'+J_NAMES[dup]+'」面一樣，確定有轉到「'+J_NAMES[P.f]+'」面嗎？') : ('「'+J_NAMES[P.f]+'」面拍好了（疊合 '+P.used+' 張）'));
+  const sm=document.createElement('small'); sm.textContent='格線要落在貼紙之間的縫上；沒對準可按「微調格線」。'; m.appendChild(sm);
+  setJState('review'); vibrate(60);
+  // show it on the 3D cube right away
+  jShowScanCube(P); 
+  setStatus('確認「'+J_NAMES[P.f]+'」面');
+}
+$('btnRvRetake').onclick=()=>{ S.jpending=null; jShowScanCube(); jStartFace(); };
+$('btnRvAdjust').onclick=()=>openAdjust('pending');
+$('btnRvOk').onclick=async()=>{
+  const P=S.jpending; if(!P) return; S.jf[P.f]={src:P.src, quad:P.quad, face:P.face, patches:P.patches, used:P.used}; S.jpending=null;
+  if(P.live) (S.doneLive=S.doneLive||{})[P.f]=P.live; S.turnSeen=0;
+  jShowScanCube(); jRenderChips(); jRenderRemain(); jUpdateProgress();
+  const nx=jNext();
+  if(!nx){ setJState('done'); setStatus('6 面完成','按「下一步：拼圖解鎖」'); R3.root.quaternion.copy(VIEW_Q()); toast('6 面都完成了，按「下一步：拼圖解鎖」',2600); return; }
+  setJState('turn'); jShowScanCube(); await showTurn(nx);
+};
+$('btnTurnReplay').onclick=()=>{ const nx=jNext(); if(nx) showTurn(nx); };
+$('btnTurnGo').onclick=()=>jStartFace();
+// called every analysis tick in jigsaw mode
 function jTick(pats, motion, reg){
-  if(!jNext() || S.capturing) { setRing(0); renderBurst(); return; }
-  const tex=E.texture(pats); const present=tex>T.tex;
-  if(S.cooldown){
-    // released as soon as a different face is in view (or the cube left the frame)
-    const changed = present && S.lastMeans && coarseDiff(cellMeans(pats),S.lastMeans,true)>0.07;
-    if(!present || changed) S.cooldownAway=(S.cooldownAway||0)+1; else S.cooldownAway=0;
-    if(S.cooldownAway>=2){ S.cooldown=false; S.cooldownAway=0; BURST.frames=[]; }
-    setRing(0); $('guide').className='ok'; renderBurst(); return;
+  if(S.capturing) return;
+  const tex=E.texture(pats), present=tex>T.tex;
+  if(S.jstate==='turn'){
+    // a different face is held steadily in the box -> start scanning it
+    const cm=cellMeans(pats); const done=Object.values(S.doneLive||{});
+    const changed = present && motion<T.burstMaxMotion && done.length>0 && Math.min(...done.map(x=>coarseDiff(cm,x,true)))>T.newFace;
+    S.turnSeen = changed ? (S.turnSeen||0)+1 : 0;
+    $('guide').className = changed ? 'ready' : 'armed';
+    if(S.turnSeen>=6){ S.turnSeen=0; jStartFace(); }
+    return;
   }
-  if(!present){ if(++BURST.miss>=3) BURST.frames=[]; jStatusIdle(); $('guide').className=''; setRing(0); renderBurst(); return; }
+  if(S.jstate!=='scan') return;
+  if(!present){ if(++BURST.miss>=4) resetBurst(); $('guide').className=''; setStatus('掃描「'+J_NAMES[jNext()]+'」面','把這一面放進框內，框線跑滿就完成'); return; }
   BURST.miss=0; $('guide').className='ready';
+  const cm=cellMeans(pats);
+  // the face in view changed (user turned too early)? restart this face
+  if(BURST.frames.length && coarseDiff(cm,BURST.frames[0].cm,true)>0.1) resetBurst();
   if(motion<T.burstMaxMotion){
-    // a different face than the burst so far? start over with this one
-    const cm=cellMeans(pats);
-    if(BURST.frames.length && coarseDiff(cm,BURST.frames[BURST.frames.length-1].cm,false)>0.09) BURST.frames=[];
-    BURST.frames.push({reg, pats, cm});
-    if(BURST.frames.length>T.burstNeed) BURST.frames.shift();
+    const sh=E.sharpness({d:reg.d,w:reg.w,h:reg.h});
+    BURST.maxSharp=Math.max(BURST.maxSharp,sh);
+    BURST.frames.push({reg, cm, sh});
+    // keep only frames that are reasonably sharp compared with the best seen
+    BURST.frames=BURST.frames.filter(f=>f.sh>=BURST.maxSharp*0.55).slice(-T.faceNeed);
   }
-  setRing(BURST.frames.length/T.burstNeed,'#c9a45c'); renderBurst();
-  setStatus(BURST.frames.length? '連拍中…' : '拿穩一點', '輕微晃動沒關係，系統會自動疊圖');
-  if($('optAuto').checked && BURST.frames.length>=T.burstNeed){ const fr=BURST.frames.map(b=>b.reg); BURST.frames=[]; captureNow.__frames=fr; captureBurst(fr); }
+  const frac=BURST.frames.length/T.faceNeed; setFaceProgress(frac);
+  setStatus(frac<0.4?'對準中…':'很好，再一下…', '輕微晃動沒關係，模糊的照片會自動丟掉');
+  if(BURST.frames.length>=T.faceNeed){ const fr=BURST.frames.map(b=>b.reg), cms=BURST.frames.map(b=>b.cm); resetBurst(); captureBurst(fr, cms); }
 }
-async function captureBurst(frames){ if(S.capturing) return; S.capturing=true; try{ await jCapture(frames, true); } finally { S.capturing=false; } }
+async function captureBurst(frames, cms){ if(S.capturing) return; S.capturing=true; try{ await jFinishFace(frames, cms); } finally { S.capturing=false; } }
 // ---- adjust sheet: drag 4 corners ----
 let ADJ=null;
 function openAdjust(f){
-  const d=S.jf[f]; if(!d) return; ADJ={f, quad:d.quad.map(p=>p.slice()), src:d.src};
-  $('adjTitle').textContent='微調「'+J_NAMES[f]+'」面'; $('sheetAdj').hidden=false; drawAdjust();
+  const d= f==='pending' ? S.jpending : S.jf[f]; if(!d) return; ADJ={f, quad:d.quad.map(p=>p.slice()), src:d.src};
+  $('adjTitle').textContent='微調「'+J_NAMES[f==='pending'?S.jpending.f:f]+'」面'; $('sheetAdj').hidden=false; drawAdjust();
 }
 function adjGeom(){ const c=$('adjCanvas'); const s=Math.max(ADJ.src.width,ADJ.src.height); return { k:c.width/s, ox:(c.width-ADJ.src.width*c.width/s)/2, oy:(c.height-ADJ.src.height*c.width/s)/2 }; }
 function drawAdjust(){
@@ -877,8 +984,8 @@ function drawAdjust(){
   const up=()=>{ drag=-1; }; wrap.addEventListener('pointerup',up); wrap.addEventListener('pointercancel',up);
 })();
 $('btnAdjRot').onclick=()=>{ const q=ADJ.quad; ADJ.quad=[q[3],q[0],q[1],q[2]]; drawAdjust(); };
-$('btnAdjRetake').onclick=()=>{ delete S.jf[ADJ.f]; $('sheetAdj').hidden=true; S.cooldown=false; jShowScanCube(); jRenderChips(); jRenderRemain(); jUpdateProgress(); spinToFace(F.indexOf(ADJ.f)); jStatusIdle(); toast('請重拍「'+J_NAMES[ADJ.f]+'」面（注意拿的方向）'); };
-$('btnAdjDone').onclick=()=>{ jSetFace(ADJ.f, ADJ.src, ADJ.quad); $('sheetAdj').hidden=true; jShowScanCube(); jRenderChips(); };
+$('btnAdjRetake').onclick=()=>{ if(ADJ.f==='pending'){ $('sheetAdj').hidden=true; S.jpending=null; jShowScanCube(); jStartFace(); return; } delete S.jf[ADJ.f]; if(S.doneLive) delete S.doneLive[ADJ.f]; $('sheetAdj').hidden=true; jShowScanCube(); jRenderChips(); jRenderRemain(); jUpdateProgress(); jStartFace(); toast('請重拍「'+J_NAMES[ADJ.f]+'」面（注意拿的方向）'); };
+$('btnAdjDone').onclick=()=>{ if(ADJ.f==='pending'){ S.jpending.quad=ADJ.quad; $('sheetAdj').hidden=true; showReview(); return; } jSetFace(ADJ.f, ADJ.src, ADJ.quad); $('sheetAdj').hidden=true; jShowScanCube(); jRenderChips(); };
 $('sheetAdj').addEventListener('click',e=>{ if(e.target.id==='sheetAdj') $('sheetAdj').hidden=true; });
 
 // ---- solving in a background worker ----
@@ -958,7 +1065,7 @@ $('btnFix').onclick=()=>{ const fq=S.forceCq.map((v,i)=> v==null ? null : v); $(
 function backToScan(){
   S.playing=false; S.mode='scan'; $('solve').hidden=true; $('preview').hidden=true; $('preview').style.display='none'; $('scanArea').hidden=false; $('scanArea').style.display='flex'; $('st1').className='on'; $('st2').className=''; $('stageHint').textContent='拖曳可旋轉方塊';
   $('demoBanner').hidden=!(S.method==='library'&&S.calib&&S.calib.demo);
-  requestAnimationFrame(()=>{ layoutGuide(); showScanCube(); updateProgress(); renderChips(); renderRemain(); startCamera(); });
+  requestAnimationFrame(()=>{ layoutGuide(); showScanCube(); updateProgress(); renderChips(); renderRemain(); if(S.method==='jigsaw'){ if(jNext()) jStartFace(); else { setJState('done'); setStatus('6 面完成','按「下一步：拼圖解鎖」'); } } startCamera(); });
 }
 // simulated test for jigsaw mode: scramble the demo pictures and fake the 6 guided scans
 async function jSimulate(){
@@ -974,7 +1081,7 @@ async function jSimulate(){
     S.jf[f]={src:r, quad:boxQuad({x:0,y:0,s:FACE_PX}), face:r, patches:patchesOfCanvas(r)};
     jShowScanCube(); jRenderChips(); jRenderRemain(); jUpdateProgress(); spinToFace(fi); await sleep(350);
   }
-  toast('模擬打亂完成，按「下一步：拼圖解鎖」', 3000);
+  setJState('done'); setStatus('6 面完成（模擬）','按「下一步：拼圖解鎖」'); toast('模擬打亂完成，按「下一步：拼圖解鎖」', 3000);
 }
 function syncBodyClass(){ document.body.classList.toggle('scanning', S.mode==='scan' || S.mode==='calib'); }
 setInterval(syncBodyClass, 300);
@@ -982,7 +1089,7 @@ function setMethod(m){
   S.method=m; store.set('pc_method',m); $('mJigsaw').checked=m==='jigsaw'; $('mLibrary').checked=m==='library';
   $('demoBanner').hidden=!(m==='library'&&S.calib&&S.calib.demo);
   $('btnNext').textContent = m==='jigsaw' ? '下一步：拼圖解鎖' : '下一步：解鎖';
-  if(S.mode==='scan'){ showScanCube(); renderChips(); renderRemain(); updateProgress(); if(m==='jigsaw') jStatusIdle(); }
+  if(S.mode==='scan'){ showScanCube(); renderChips(); renderRemain(); updateProgress(); if(m==='jigsaw') jStartFace(); else setJState(null); }
 }
 $('mJigsaw').onchange=()=>setMethod('jigsaw'); $('mLibrary').onchange=()=>setMethod('library');
 

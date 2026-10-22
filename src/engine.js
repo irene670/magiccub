@@ -1100,3 +1100,19 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api; else 
   }
   E.stackFrames = stackFrames; E.sharpness = sharpness;
 })();
+// quick "is a 3x3 cube face in the box?" test: seams present at the grid lines vs. at shifted lines
+(function(){
+  const E = (typeof module !== 'undefined' && module.exports) ? module.exports : (typeof window !== 'undefined' ? window.CubeEngine : globalThis.CubeEngine);
+  E.gridPresence = function(rgba, W, H, box){
+    const k = 2, w = Math.floor(W / k), h = Math.floor(H / k), L = new Float32Array(w * h);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const i = ((y * k) * W + x * k) * 4; L[y * w + x] = (0.299 * rgba[i] + 0.587 * rgba[i + 1] + 0.114 * rgba[i + 2]) / 255; }
+    const b = { x: box.x / k, y: box.y / k, s: box.s / k };
+    let best = -1e9, bb = null;
+    for (const sc of [0.94, 1, 1.06]) for (let oy = -0.06; oy <= 0.061; oy += 0.02) for (let ox = -0.06; ox <= 0.061; ox += 0.02) {
+      const s = b.s * sc, x = b.x + ox * b.s - (s - b.s) / 2, y = b.y + oy * b.s - (s - b.s) / 2;
+      const v = E.gridScore(L, w, h, x, y, s); if (v > best) { best = v; bb = { x, y, s }; }
+    }
+    const off = (E.gridScore(L, w, h, bb.x + bb.s / 6, bb.y, bb.s) + E.gridScore(L, w, h, bb.x, bb.y + bb.s / 6, bb.s)) / 2;
+    return { score: best, ratio: best / (Math.abs(off) + 0.004) };
+  };
+})();
