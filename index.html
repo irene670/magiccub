@@ -124,12 +124,19 @@ header h1 small{font-family:var(--f-body);font-weight:500;font-size:12px;color:v
 @media (prefers-reduced-motion:reduce){.spin{animation:none}}
 @media (max-height:640px){#stage{height:30vh}.steps{display:none}}
 body.scanning #stage{transition:height .3s}
-body.scanning.turning #stage{height:min(30dvh,260px)}
-body.turning #stageHint{display:none}
+body.scanning.turning #stage{height:min(40dvh,330px)}
+body.turning #stageHint,body.scanning #stageHint{display:none}
+body.solving #stage{height:min(30dvh,250px)}
+body.solving .chips{display:none}
+body.solving #solve{overflow-y:auto;overscroll-behavior:contain;padding-bottom:4px}
+body.solving .hold{padding:6px 10px;font-size:12px}
+body.solving .btn{min-height:44px}
 body.scanning .chips{padding-block:6px;gap:5px}
 body.scanning .chip{border-radius:8px}
-body.scanning #stage{height:min(15dvh,130px)}
-body.scanning .chip{aspect-ratio:auto;height:40px}
+body.scanning #stage{height:min(27dvh,230px)}
+body.scanning .chip{aspect-ratio:auto;height:34px}
+body.scanning .chip .lbl{font-size:11px;background:none;bottom:50%;transform:translateY(50%)}
+body.scanning .chip.done .lbl{background:rgba(17,20,28,.7);bottom:0;transform:none}
 body.scanning .chips{padding-block:5px}
 body.scanning header{padding-block:6px 2px}
 body.scanning header h1{font-size:17px}
@@ -145,13 +152,27 @@ body.scanning .remain{min-height:0;font-size:12px;line-height:1.35}
 #reviewMsg{font-size:14px;text-align:center;line-height:1.5;max-width:30em}
 #reviewMsg small{display:block;color:var(--muted);font-size:12px}
 #reviewMsg.warn{color:var(--warn)}
-#turnHint{position:absolute;left:50%;bottom:10px;white-space:nowrap;transform:translateX(-50%);display:flex;align-items:center;gap:8px;background:rgba(17,20,28,.82);border:1px solid var(--gold);color:var(--gold);border-radius:14px;padding:6px 12px 6px 8px;font-weight:700;font-size:14px;max-width:calc(100% - 24px);z-index:2}
-#turnHint span{color:var(--paper);line-height:1.4}
-#turnHint svg{flex:none;animation:spinArrow 1.4s ease-in-out infinite}
-#turnHint.flipx svg{transform:scaleX(-1)}
-#turnHint.up svg{transform:rotate(-90deg)}
-#turnHint.down svg{transform:rotate(90deg)}
-@keyframes spinArrow{0%,100%{opacity:.55}50%{opacity:1}}
+#turnHint{position:absolute;left:10px;right:10px;top:10px;display:flex;align-items:center;gap:10px;background:rgba(17,20,28,.86);border:1.5px solid var(--gold);border-radius:14px;padding:8px 12px 8px 8px;z-index:2;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+#turnHint .ico{flex:none;width:46px;height:46px;border-radius:12px;background:var(--gold);color:var(--gold-ink);display:grid;place-items:center}
+#turnHint .ico svg{width:34px;height:34px;animation:nudge 1.6s ease-in-out infinite}
+#turnHint .tx{min-width:0;display:flex;flex-direction:column;gap:1px}
+#turnHint .stepTag{font-size:11px;letter-spacing:.06em;color:var(--gold);font-weight:700}
+#turnHint .main{font-size:16px;font-weight:800;color:var(--paper);line-height:1.3}
+#turnHint .seg{font-size:12px;color:#d8d0bf;line-height:1.35}
+@keyframes nudge{0%,100%{transform:rotate(0)}50%{transform:rotate(-14deg)}}
+#holdTag{position:absolute;left:50%;bottom:8px;transform:translateX(-50%);font-size:12px;font-weight:700;color:var(--gold-ink);background:var(--gold);border-radius:99px;padding:3px 10px;white-space:nowrap;pointer-events:none}
+.pillrow{display:flex;gap:6px;justify-content:center;flex-wrap:wrap}
+.pill{min-height:44px;padding:0 14px;border-radius:99px;border:1px solid var(--line);background:transparent;color:var(--muted);font-size:13px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;touch-action:manipulation}
+.pill svg{width:16px;height:16px}
+.btn,.pill,.chip{touch-action:manipulation;transition:transform .12s ease}
+.btn:active,.pill:active{transform:scale(.97)}
+.movecard .viz{position:relative;width:76px;height:76px;flex:none}
+.movecard .viz canvas{width:76px;height:76px;border-radius:12px;border:2px solid var(--gold);display:block}
+.movecard .viz svg{position:absolute;inset:-8px;width:92px;height:92px;pointer-events:none;color:var(--gold);filter:drop-shadow(0 1px 2px #000)}
+.movecard .viz .tag{position:absolute;right:-6px;bottom:-6px;font-family:var(--f-mono);font-weight:700;font-size:13px;background:var(--gold);color:var(--gold-ink);border-radius:8px;padding:1px 6px}
+.movecard .desc b{font-size:18px;display:block;margin-bottom:2px}
+.movecard .split{display:inline-block;margin-top:4px;font-size:12px;font-weight:700;color:var(--gold-ink);background:var(--gold);border-radius:99px;padding:1px 8px}
+
 #burst{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);display:flex;gap:5px;pointer-events:none}
 #burst i{width:9px;height:9px;border-radius:50%;background:rgba(239,231,214,.35);display:block}
 #burst i.on{background:var(--gold)}
@@ -170,7 +191,8 @@ body.scanning .remain{min-height:0;font-size:12px;line-height:1.35}
     <div id="demoBanner" hidden>尚未校正：目前用示範圖案。點這裡開始校正 →</div>
     <div id="stageBadge">0 / 6</div>
     <div id="stageHint">拖曳可旋轉方塊</div>
-    <div id="turnHint" hidden><svg viewBox="0 0 64 64" width="44" height="44" aria-hidden="true"><path id="turnArrow" d="M50 30a18 18 0 1 0-6 14" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round"/><path d="M38 44l7 1 1-7" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg><span id="turnText"></span></div>
+    <div id="turnHint" hidden role="status" aria-live="polite"><div class="ico" id="turnIco"></div><div class="tx"><span class="stepTag" id="turnStep"></span><span class="main" id="turnText"></span><span class="seg" id="turnSeg"></span></div></div>
+    <div id="holdTag" hidden></div>
   </div>
 
   <div class="chips" id="chips"></div>
@@ -184,7 +206,7 @@ body.scanning .remain{min-height:0;font-size:12px;line-height:1.35}
         <div id="guide"><svg id="gprog" viewBox="0 0 100 100" preserveAspectRatio="none"><rect x="1" y="1" width="98" height="98" rx="4" pathLength="100" fill="none" stroke-width="2.4" vector-effect="non-scaling-stroke"/></svg></div>
         <div id="reviewPane" hidden><canvas id="reviewCanvas" width="300" height="300"></canvas><div id="reviewMsg"></div></div>
         <svg id="ring" viewBox="0 0 44 44"><circle cx="22" cy="22" r="18" fill="rgba(17,20,28,.55)" stroke="rgba(239,231,214,.25)" stroke-width="4"/><circle id="ringArc" cx="22" cy="22" r="18" fill="none" stroke="#c9a45c" stroke-width="4" stroke-linecap="round" stroke-dasharray="113" stroke-dashoffset="113" transform="rotate(-90 22 22)"/></svg>
-        <div id="status">準備相機中…</div>
+        <div id="status" role="status" aria-live="polite">準備相機中…</div>
         <div id="burst" aria-hidden="true"></div>
         <div id="zoomBar" hidden><span>縮放</span><input id="zoom" type="range" min="0.5" max="3" step="0.01" value="1"><span>拖曳照片對齊方框</span></div>
         <div id="camMsg" hidden></div>
@@ -198,10 +220,10 @@ body.scanning .remain{min-height:0;font-size:12px;line-height:1.35}
           <button class="btn small" id="btnCalRot">↻ 轉 90°</button>
         </div>
       </div>
-      <div class="row" id="rowCam">
-        <button class="btn" id="btnPhoto">拍照 / 選照片</button>
-        <button class="btn" id="btnCapture">拍這一面</button>
-        <button class="btn small ghost" id="btnFlip" aria-label="切換前後鏡頭">⇄ 鏡頭</button>
+      <div class="pillrow" id="rowCam">
+        <button class="pill" id="btnCapture"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>手動拍</button>
+        <button class="pill" id="btnPhoto"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-8 8"/></svg>用相簿照片</button>
+        <button class="pill" id="btnFlip" aria-label="切換前後鏡頭"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h12l-3-3M20 17H8l3 3"/></svg>換鏡頭</button>
       </div>
       <div class="row" id="rowReview" hidden>
         <button class="btn ghost" id="btnRvRetake">重拍</button>
@@ -224,7 +246,7 @@ body.scanning .remain{min-height:0;font-size:12px;line-height:1.35}
     <!-- solve -->
     <div id="solve" hidden>
       <div class="hold" id="hold"></div>
-      <div class="movecard"><div class="big" id="mvBig">–</div><div class="desc" id="mvDesc"></div></div>
+      <div class="movecard"><div class="viz" id="mvViz"></div><div class="desc" id="mvDesc"></div></div>
       <div class="moves" id="moves"></div>
       <div class="row">
         <button class="btn" id="btnPrev">◀ 上一步</button>
@@ -3019,7 +3041,7 @@ function initThree(){
   const renderer=new THREE.WebGLRenderer({antialias:true,alpha:true}); renderer.setPixelRatio(Math.min(2,window.devicePixelRatio||1));
   st.insertBefore(renderer.domElement, st.firstChild);
   const scene=new THREE.Scene(); const camera=new THREE.PerspectiveCamera(32,1,0.1,100);
-  camera.position.set(0,0,11.5);
+  camera.position.set(0,0,9.6);
   scene.add(new THREE.AmbientLight(0xffffff,1));
   const root=new THREE.Group(); scene.add(root);
   root.quaternion.setFromEuler(new THREE.Euler(0.5,-0.62,0,'XYZ'));
@@ -3143,7 +3165,7 @@ async function startCamera(){
     video=$('vid'); video.muted=true; video.playsInline=true; video.srcObject=S.stream; video.hidden=false; try{ await video.play(); }catch(e){}
     octx.clearRect(0,0,cam.width,cam.height);
     cam.classList.toggle('mirror', S.facing==='user'); video.classList.toggle('mirror', S.facing==='user');
-    if(S.mode==='calib') setStatus('對準後按「手動擷取」'); else if(S.method==='jigsaw'){ if(!S.jstate||S.jstate==='scan') jStartFace(); } else setStatus('把方塊的任一面放進框內');
+    if(S.mode==='calib') setStatus('對準後按「手動擷取」'); else if(S.method==='jigsaw'){ if(!S.jstate) jReady(); } else setStatus('把方塊的任一面放進框內');
   }catch(e){ console.warn(e); camFail(e && e.name==='NotAllowedError' ? '相機權限被拒絕，或這個頁面所在的環境不允許使用相機。' : '無法開啟相機（'+(e&&e.name||e)+'）。'); }
 }
 function camFail(msg){
@@ -3218,7 +3240,7 @@ async function captureNow(auto){
       const i=CAL_ORDER.indexOf(S.calibCur); const nxt=CAL_ORDER.find((f,j)=>j>i && !S.calibSlots[f]) || CAL_ORDER.find(f=>!S.calibSlots[f]);
       if(nxt) S.calibCur=nxt; renderCalib(); spinToFace(F.indexOf(S.calibCur)); return;
     }
-    if(S.method==='jigsaw'){ if(S.jstate!=='scan') { if(S.jstate==='turn') jStartFace(); return; } const fr=BURST.frames.length>=2? BURST.frames.slice() : [Object.assign(lockFrame(reg),{cm:cellMeans(E.extractPatches(reg.d,reg.w,reg.h,reg.box.x,reg.box.y,reg.box.s))})]; resetBurst(); await jFinishFrames(fr); return; }
+    if(S.method==='jigsaw'){ if(S.jstate!=='scan') { if(S.jstate==='turn'||S.jstate==='ready') jStartFace(); return; } const fr=BURST.frames.length>=2? BURST.frames.slice() : [Object.assign(lockFrame(reg),{cm:cellMeans(E.extractPatches(reg.d,reg.w,reg.h,reg.box.x,reg.box.y,reg.box.s))})]; resetBurst(); await jFinishFrames(fr); return; }
     if(!S.ref) return;
     setStatus('擷取中…'); setRing(1,'#86c39a');
     await sleep(10);
@@ -3279,7 +3301,7 @@ $('filePhoto').onchange=async e=>{
 // ---------------- buttons: scan ----------------
 $('btnCapture').onclick=()=>captureNow(false);
 $('btnFlip').onclick=()=>{ S.facing = S.facing==='user'?'environment':'user'; startCamera(); };
-$('btnUndo').onclick=()=>{ if(S.method==='jigsaw'){ const last=[...J_ORDER].reverse().find(f=>S.jf[f]); if(last){ delete S.jf[last]; if(S.doneLive) delete S.doneLive[last]; S.jpending=null; jShowScanCube(); jRenderChips(); jRenderRemain(); jUpdateProgress(); jStartFace(); toast('請重拍「'+J_NAMES[last]+'」面'); } return; } if(S.caps.length) removeCap(S.caps.length-1); };
+$('btnUndo').onclick=()=>{ if(S.method==='jigsaw'){ const last=[...J_ORDER].reverse().find(f=>S.jf[f]); if(last){ delete S.jf[last]; if(S.doneLive) delete S.doneLive[last]; S.jpending=null; jShowScanCube(); jRenderChips(); jRenderRemain(); jUpdateProgress(); jReady(); toast('請重拍「'+J_NAMES[last]+'」面'); } return; } if(S.caps.length) removeCap(S.caps.length-1); };
 $('btnNext').onclick=()=> S.method==='jigsaw' ? doJigsaw() : doSolve();
 $('demoBanner').onclick=()=>openCalib();
 
@@ -3312,8 +3334,14 @@ async function doSolve(){
   S.solution=sol; S.step=0; S.startState=E.cloneState(rec.state); S.curState=E.cloneState(rec.state);
   enterSolve();
 }
+function expandQuarter(sol){
+  if(sol.steps) return; const steps=[];
+  sol.moves.forEach(([f,k])=>{ k=((k%4)+4)%4; if(k===2){ steps.push({f,k:1,part:1}); steps.push({f,k:1,part:2}); } else steps.push({f,k,part:0}); });
+  sol.rawLen=sol.moves.length; sol.steps=steps; sol.moves=steps.map(x=>[x.f,x.k]);
+}
 function enterSolve(){
-  S.mode='solve'; stopCamera();
+  expandQuarter(S.solution);
+  S.mode='solve'; stopCamera(); setHoldTag(null); TURN_TOKEN++;
   $('scanArea').hidden=true; $('scanArea').style.display='none'; $('solve').hidden=false; $('st1').className=''; $('st2').className='on';
   $('stageHint').textContent='上方是你手上方塊的樣子，可拖曳旋轉對照'; $('demoBanner').hidden=true;
   showStateCube(S.curState); R3.root.quaternion.setFromEuler(new THREE.Euler(0.5,-0.62,0,'XYZ'));
@@ -3325,26 +3353,38 @@ function enterSolve(){
   hold.appendChild(t);
   const sol=S.solution;
   $('solveNote').className='note '+(sol.verified?'ok':'bad');
-  $('solveNote').textContent = (sol.verified? '已用模擬驗證：照著轉完會完全還原。':'警告：驗證未通過。') + ' 共 '+sol.moves.length+' 步' + ($('optCenters').checked && sol.fix? '（其中約 '+(sol.moves.length - Math.min(sol.base, sol.moves.length))+' 步用來把中心格的圖轉正）':'') + '。';
+  $('solveNote').textContent = (sol.verified? '已用模擬驗證：照著轉完會完全還原。':'警告：驗證未通過。') + ' 共 '+sol.moves.length+' 步，每一步都只轉 90°（180° 已拆成兩步）。';
   renderMoves(); updateUndoSolve();
 }
-function moveText(f,k){
-  const nm=names(); k=((k%4)+4)%4;
-  const dir = k===1?'順時針轉 90°':k===3?'逆時針轉 90°':'轉 180°';
-  return { big:E.fmtMove(f,k), main:'把「'+FACE_CN[f]+'」面（'+nm[f]+'）'+dir, sub:'方向以「正對著那一面」來看；只轉那一層。' };
+function moveText(st){
+  const nm=names(), f=st.f, k=((st.k%4)+4)%4;
+  return { main:'轉「'+FACE_CN[f]+'」面 '+(k===1?'順時針':'逆時針')+' 90°', who:'中間是這張圖的那一面（'+nm[f]+'）', sub:'面向那一面看，只轉最外面那一層。', split: st.part ? '180° 分兩次：第 '+st.part+' / 2 次' : '' };
 }
 function renderMoves(){
   const el=$('moves'); el.innerHTML='';
-  S.solution.moves.forEach(([f,k],i)=>{ const s=document.createElement('span'); s.textContent=E.fmtMove(f,k); s.className=i<S.step?'done':i===S.step?'cur':''; s.onclick=()=>jumpTo(i); el.appendChild(s); });
+  S.solution.steps.forEach((st,i)=>{ const sp=document.createElement('span'); sp.textContent=E.fmtMove(st.f,st.k)+(st.part?'·'+st.part:''); sp.className=i<S.step?'done':i===S.step?'cur':''; sp.onclick=()=>jumpTo(i); el.appendChild(sp); });
   const cur=el.children[S.step]; if(cur) cur.scrollIntoView({block:'nearest',inline:'center',behavior:'smooth'});
-  const mv=S.solution.moves[S.step];
-  if(mv){ const t=moveText(mv[0],mv[1]); $('mvBig').textContent=t.big; $('mvDesc').innerHTML=''; $('mvDesc').append(t.main); const sm=document.createElement('small'); sm.textContent='第 '+(S.step+1)+' / '+S.solution.moves.length+' 步　'+t.sub; $('mvDesc').appendChild(sm); }
-  else { $('mvBig').textContent='✓'; $('mvDesc').textContent='完成！方塊已解鎖還原。'; }
-  $('stageBadge').textContent = S.step+' / '+S.solution.moves.length;
+  const st=S.solution.steps[S.step], viz=$('mvViz'), d=$('mvDesc'); viz.innerHTML=''; d.innerHTML='';
+  if(st){
+    const t=moveText(st); const c=canvasOf(152,152); c.getContext('2d').drawImage(S.refCells[F.indexOf(st.f)*9+4],0,0,152,152); viz.appendChild(c);
+    viz.insertAdjacentHTML('beforeend', ICONS[st.k===1?'cw':'ccw']+'<span class="tag">'+E.fmtMove(st.f,st.k)+'</span>');
+    const b=document.createElement('b'); b.textContent=t.main; d.appendChild(b); d.append(t.who);
+    const sm=document.createElement('small'); sm.textContent='第 '+(S.step+1)+' / '+S.solution.steps.length+' 步　'+t.sub; d.appendChild(sm);
+    if(t.split){ const sp=document.createElement('span'); sp.className='split'; sp.textContent=t.split; d.appendChild(sp); }
+  } else { viz.innerHTML='<div style="width:76px;height:76px;border-radius:12px;background:var(--ok);display:grid;place-items:center;font-size:40px;color:#10301a">✓</div>'; const b=document.createElement('b'); b.textContent='完成！方塊已解鎖還原'; d.appendChild(b); }
+  $('stageBadge').textContent = S.step+' / '+S.solution.steps.length;
   updateUndoSolve();
 }
+// flash the layer that is about to turn
+function flashLayer(state, face, ms){
+  return new Promise(res=>{
+    const ax=E.NRM[face]; const mats=[];
+    for(const st of state){ if(st.pos[0]*ax[0]+st.pos[1]*ax[1]+st.pos[2]*ax[2]===1){ const g=R3.cubies[E.slotPos(st.id).join(',')]; g.children.forEach((m,i)=>{ if(i>0 && !mats.includes(m.material)) mats.push(m.material); }); } }
+    mats.forEach(m=>m.color.setHex(0xffe7a3)); setTimeout(()=>{ mats.forEach(m=>m.color.setHex(0xffffff)); res(); }, ms);
+  });
+}
 function updateUndoSolve(){ $('btnPrev').disabled=S.step===0||S.animating; $('btnStep').disabled=S.step>=S.solution.moves.length||S.animating; }
-async function stepFwd(){ if(S.animating||S.step>=S.solution.moves.length) return false; S.animating=true; updateUndoSolve(); const [f,k]=S.solution.moves[S.step]; await animateMove(S.curState,f,k,520); S.step++; S.animating=false; renderMoves(); if(S.step===S.solution.moves.length){ vibrate([60,60,120]); toast('解鎖完成！'); } return true; }
+async function stepFwd(){ if(S.animating||S.step>=S.solution.moves.length) return false; S.animating=true; updateUndoSolve(); const [f,k]=S.solution.moves[S.step]; await flashLayer(S.curState,f,260); await animateMove(S.curState,f,k,620); S.step++; S.animating=false; renderMoves(); if(S.step===S.solution.moves.length){ vibrate([60,60,120]); toast('解鎖完成！'); } return true; }
 async function stepBack(){ if(S.animating||S.step===0) return; S.animating=true; updateUndoSolve(); S.step--; const [f,k]=S.solution.moves[S.step]; await animateMove(S.curState,f,(4-k)%4,420); S.animating=false; renderMoves(); }
 async function jumpTo(i){ if(S.animating) return; S.playing=false; $('btnPlay').textContent='▶ 自動播放'; S.curState=E.applyAlg(E.cloneState(S.startState), S.solution.moves.slice(0,i)); S.step=i; placeCubies(S.curState); renderMoves(); }
 $('btnStep').onclick=stepFwd; $('btnPrev').onclick=stepBack;
@@ -3488,11 +3528,15 @@ function renderBurst(){ $('burst').innerHTML=''; }
 function setFaceProgress(frac){ const r=$('gprog').querySelector('rect'); r.style.strokeDashoffset = String(100*(1-Math.max(0,Math.min(1,frac)))); r.style.opacity = frac>0 ? 1 : 0; }
 function setJState(st){
   S.jstate=st; document.body.classList.toggle('turning', st==='turn' && S.method==='jigsaw');
+  if(st!=='scan' && st!=='ready') setHoldTag(null);
+  $('remain').hidden = S.method==='jigsaw' && S.mode==='scan';
   const jig = S.method==='jigsaw' && S.mode==='scan';
   $('rowReview').hidden = !(jig && st==='review');
-  $('rowTurn').hidden = !(jig && st==='turn');
-  $('rowCam').hidden = jig && (st==='review'||st==='turn');
-  $('rowScan').hidden = jig && (st==='review'||st==='turn');
+  $('rowTurn').hidden = !(jig && (st==='turn'||st==='ready'));
+  $('btnTurnReplay').hidden = st!=='turn';
+  $('btnTurnGo').textContent = st==='turn' ? '轉好了，開始拍照' : '開始拍照';
+  $('rowCam').hidden = jig && (st==='review'||st==='turn'||st==='ready');
+  $('rowScan').hidden = jig && (st==='review'||st==='turn'||st==='ready');
   $('reviewPane').hidden = !(jig && st==='review');
   $('turnHint').hidden = !(jig && st==='turn');
   if(st!=='scan'){ setFaceProgress(0); if(typeof clearLock==='function') clearLock(); }
@@ -3518,24 +3562,52 @@ function animateHold(path, ms){
   });
 }
 const TURN_NOTE='（金色★那面要轉到對著鏡頭）';
-const TURN = {
-  R:{ short:'整顆向左轉 90°', text:'整顆方塊向左轉 90°（右邊那面轉到正前方），頂部仍朝上', path:['R'], cls:'' },
-  B:{ short:'再向左轉 90°', text:'再向左轉 90°，頂部仍朝上', path:['B'], cls:'' },
-  L:{ short:'再向左轉 90°', text:'再向左轉 90°，頂部仍朝上', path:['L'], cls:'' },
-  U:{ short:'回正面 → 頂部往前倒', text:'先轉回最一開始的正面，再把頂部往前倒，讓上面對著鏡頭', path:['F','U'], cls:'down' },
-  D:{ short:'回正面 → 底部往前翻', text:'先轉回正面，再把底部往前翻，讓底面對著鏡頭', path:['F','D'], cls:'up' }
+const ICONS = {
+  yaw:'<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="16" cy="17" rx="11" ry="5"/><path d="M8 13.5 4.6 15.8 8.2 18"/><path d="M16 5v7"/></svg>',
+  tipFwd:'<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="12" width="12" height="12" rx="2"/><path d="M8 9c3-4 10-5 15-1"/><path d="M23 4v4h-4"/></svg>',
+  tipUp:'<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="8" width="12" height="12" rx="2"/><path d="M8 23c3 4 10 5 15 1"/><path d="M23 28v-4h-4"/></svg>',
+  cw:'<svg viewBox="0 0 92 92" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><path d="M46 8a38 38 0 1 1-33 19"/><path d="M4 22l9 6 5-10"/></svg>',
+  ccw:'<svg viewBox="0 0 92 92" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><path d="M46 8a38 38 0 1 0 33 19"/><path d="M88 22l-9 6-5-10"/></svg>'
 };
+const TURN = {
+  R:{ icon:'yaw', main:'整顆方塊向左轉 90°', segs:['右邊那一面會轉到正前方，頂部一樣朝上'], path:['R'] },
+  B:{ icon:'yaw', main:'整顆方塊再向左轉 90°', segs:['原本的背面會轉到正前方，頂部一樣朝上'], path:['B'] },
+  L:{ icon:'yaw', main:'整顆方塊再向左轉 90°', segs:['原本的左面會轉到正前方，頂部一樣朝上'], path:['L'] },
+  U:{ icon:'tipFwd', main:'讓「上面」對著鏡頭', segs:['① 先轉回第 1 面（正面）對著鏡頭','② 再把頂部往前倒，上面就對著鏡頭'], path:['F','U'] },
+  D:{ icon:'tipUp', main:'讓「底面」對著鏡頭', segs:['① 先轉回第 1 面（正面）對著鏡頭','② 再把底部往前翻，底面就對著鏡頭'], path:['F','D'] }
+};
+let TURN_TOKEN=0;
 async function showTurn(nx){
-  const t=TURN[nx]; $('turnText').textContent=t.short+'　★ 轉到正前方'; $('turnHint').className=t.cls;
-  setStatus('請轉到「'+J_NAMES[nx]+'」面', t.text+TURN_NOTE);
-  R3.root.quaternion.copy(VIEW_Q().multiply(holdQ(J_ORDER[J_ORDER.indexOf(nx)-1])));
-  await sleep(300); await animateHold(t.path, 900);
+  const t=TURN[nx], idx=J_ORDER.indexOf(nx); const tok=++TURN_TOKEN;
+  $('turnIco').innerHTML=ICONS[t.icon]; $('turnStep').textContent='第 '+(idx+1)+' / 6 面 · '+J_NAMES[nx]+'面'; $('turnText').textContent=t.main; $('turnSeg').textContent=t.segs[0];
+  setStatus('請轉到「'+J_NAMES[nx]+'」面', t.main+TURN_NOTE);
+  // loop the motion until the user starts scanning the new face
+  const prev=J_ORDER[idx-1];
+  while(tok===TURN_TOKEN && S.jstate==='turn'){
+    R3.root.quaternion.copy(VIEW_Q().multiply(holdQ(prev))); $('turnSeg').textContent=t.segs[0];
+    await sleep(600);
+    for(let i=0;i<t.path.length;i++){
+      if(tok!==TURN_TOKEN || S.jstate!=='turn') return;
+      $('turnSeg').textContent=t.segs[Math.min(i,t.segs.length-1)];
+      await animateHold([t.path[i]], 950); await sleep(i<t.path.length-1?500:1300);
+    }
+  }
+}
+function setHoldTag(text){ const el=$('holdTag'); el.hidden=!text; if(text) el.textContent=text; }
+function jReady(){
+  const nx=jNext(); resetBurst(); clearLock();
+  if(!nx){ setJState('done'); setStatus('6 面完成','按「下一步：拼圖解鎖」'); return; }
+  if(nx!=='F' && S.jf.F){ setJState('turn'); showTurn(nx); return; }
+  setJState('ready'); jShowScanCube(); R3.root.quaternion.copy(VIEW_Q().multiply(holdQ(nx)));
+  setStatus('準備拍「'+J_NAMES[nx]+'」面', nx==='F' ? '任選一面當正面、頂部朝上，對準後按「開始拍照」' : '對準後按「開始拍照」');
+  setHoldTag(nx==='F' ? '★ 任選一面當正面，頂部朝上；之後都以它為準' : '第 '+(J_ORDER.indexOf(nx)+1)+' / 6 面：★ 這面對著鏡頭');
 }
 function jStartFace(){
   const nx=jNext(); resetBurst();
   if(!nx){ setJState('done'); setStatus('6 面完成','按「下一步：拼圖解鎖」'); return; }
-  setJState('scan'); jShowScanCube(); R3.root.quaternion.copy(VIEW_Q().multiply(holdQ(nx)));
+  setJState('scan'); TURN_TOKEN++; jShowScanCube(); R3.root.quaternion.copy(VIEW_Q().multiply(holdQ(nx)));
   setStatus('掃描「'+J_NAMES[nx]+'」面', '把這一面放進框內，框線跑滿就完成');
+  setHoldTag(nx==='F' ? '★ 任選一面當正面，頂部朝上；之後都以它為準' : '第 '+(J_ORDER.indexOf(nx)+1)+' / 6 面：★ 這面對著鏡頭');
 }
 // stack the collected frames of this face, then freeze for review
 // lock onto the cube face in one analysed region -> straightened face
@@ -3588,20 +3660,16 @@ $('btnRvOk').onclick=async()=>{
   setJState('turn'); jShowScanCube(); await showTurn(nx);
 };
 $('btnTurnReplay').onclick=()=>{ const nx=jNext(); if(nx) showTurn(nx); };
+$('btnTurnReplay').textContent='重播動畫';
 $('btnTurnGo').onclick=()=>jStartFace();
 // called every analysis tick in jigsaw mode
 function jTick(pats, motion, reg){
   if(S.capturing) return;
   const tex=E.texture(pats), present=tex>T.tex;
   if(S.jstate==='turn'){
-    // a different face is held steadily in the box -> start scanning it
-    const cm=cellMeans(pats); const done=Object.values(S.doneLive||{});
-    const changed = present && motion<T.burstMaxMotion && done.length>0 && Math.min(...done.map(x=>coarseDiff(cm,x,true)))>T.newFace;
-    S.turnSeen = changed ? (S.turnSeen||0)+1 : 0;
-    $('guide').className = changed ? 'ready' : 'armed';
-    if(S.turnSeen>=6){ S.turnSeen=0; jStartFace(); }
-    return;
+    $('guide').className='armed'; return;   // waits for the "開始拍照" button
   }
+  if(S.jstate==='ready'){ $('guide').className='armed'; return; }
   if(S.jstate!=='scan') return;
   if(!present){ if(++BURST.miss>=4) resetBurst(); clearLock(); $('guide').className=''; setStatus('掃描「'+J_NAMES[jNext()]+'」面','把這一面放進框內，出現綠框就是鎖定了，會自動連拍'); return; }
   BURST.miss=0;
@@ -3759,7 +3827,7 @@ $('btnFix').onclick=()=>{ const fq=S.forceCq.map((v,i)=> v==null ? null : v); $(
 function backToScan(){
   S.playing=false; S.mode='scan'; $('solve').hidden=true; $('preview').hidden=true; $('preview').style.display='none'; $('scanArea').hidden=false; $('scanArea').style.display='flex'; $('st1').className='on'; $('st2').className=''; $('stageHint').textContent='拖曳可旋轉方塊';
   $('demoBanner').hidden=!(S.method==='library'&&S.calib&&S.calib.demo);
-  requestAnimationFrame(()=>{ layoutGuide(); showScanCube(); updateProgress(); renderChips(); renderRemain(); if(S.method==='jigsaw'){ if(jNext()) jStartFace(); else { setJState('done'); setStatus('6 面完成','按「下一步：拼圖解鎖」'); } } startCamera(); });
+  requestAnimationFrame(()=>{ layoutGuide(); showScanCube(); updateProgress(); renderChips(); renderRemain(); if(S.method==='jigsaw'){ if(jNext()) jReady(); else { setJState('done'); setStatus('6 面完成','按「下一步：拼圖解鎖」'); } } startCamera(); });
 }
 // simulated test for jigsaw mode: scramble the demo pictures and fake the 6 guided scans
 async function jSimulate(){
@@ -3777,13 +3845,13 @@ async function jSimulate(){
   }
   setJState('done'); setStatus('6 面完成（模擬）','按「下一步：拼圖解鎖」'); toast('模擬打亂完成，按「下一步：拼圖解鎖」', 3000);
 }
-function syncBodyClass(){ document.body.classList.toggle('scanning', S.mode==='scan' || S.mode==='calib'); }
+function syncBodyClass(){ document.body.classList.toggle('scanning', S.mode==='scan' || S.mode==='calib'); document.body.classList.toggle('solving', S.mode==='solve' || S.mode==='preview'); }
 setInterval(syncBodyClass, 300);
 function setMethod(m){
   S.method=m; store.set('pc_method',m); $('mJigsaw').checked=m==='jigsaw'; $('mLibrary').checked=m==='library';
   $('demoBanner').hidden=!(m==='library'&&S.calib&&S.calib.demo);
   $('btnNext').textContent = m==='jigsaw' ? '下一步：拼圖解鎖' : '下一步：解鎖';
-  if(S.mode==='scan'){ showScanCube(); renderChips(); renderRemain(); updateProgress(); if(m==='jigsaw') jStartFace(); else setJState(null); }
+  if(S.mode==='scan'){ showScanCube(); renderChips(); renderRemain(); updateProgress(); if(m==='jigsaw') jReady(); else setJState(null); }
 }
 $('mJigsaw').onchange=()=>setMethod('jigsaw'); $('mLibrary').onchange=()=>setMethod('library');
 
