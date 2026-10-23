@@ -1116,3 +1116,109 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api; else 
     return { score: best, ratio: best / (Math.abs(off) + 0.004) };
   };
 })();
+// ---- cube-face locking: find the 4 straight outer edges of the face near the guide box ----
+(function(){
+  const E = (typeof module !== 'undefined' && module.exports) ? module.exports : (typeof window !== 'undefined' ? window.CubeEngine : globalThis.CubeEngine);
+  // gray + |gx|,|gy| (Sobel) of an RGBA buffer, downscaled by k
+  function gradients(rgba, W, H, k) {
+    const w = Math.floor(W / k), h = Math.floor(H / k), g = new Float32Array(w * h);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { let s = 0; for (let yy = 0; yy < k; yy++) for (let xx = 0; xx < k; xx++) { const i = ((y * k + yy) * W + x * k + xx) * 4; s += 0.299 * rgba[i] + 0.587 * rgba[i + 1] + 0.114 * rgba[i + 2]; } g[y * w + x] = s / (k * k); }
+    // light blur
+    const b = Float32Array.from(g); // borders keep their own value (no fake edges at the region boundary)
+    for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) { const i = y * w + x; b[i] = (g[i] * 4 + g[i - 1] + g[i + 1] + g[i - w] + g[i + w]) / 8; }
+    const gx = new Float32Array(w * h), gy = new Float32Array(w * h);
+    for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) { const i = y * w + x;
+      gx[i] = Math.abs((b[i - w + 1] + 2 * b[i + 1] + b[i + w + 1]) - (b[i - w - 1] + 2 * b[i - 1] + b[i + w - 1]));
+      gy[i] = Math.abs((b[i + w - 1] + 2 * b[i + w] + b[i + w + 1]) - (b[i - w - 1] + 2 * b[i - w] + b[i - w + 1])); }
+    // thin-line response (|2nd derivative|, spacing 2): seams are thin dark/glare lines, picture edges are steps
+    const lx = new Float32Array(w * h), ly = new Float32Array(w * h);
+    for (let y = 2; y < h - 2; y++) for (let x = 2; x < w - 2; x++) { const i = y * w + x;
+      lx[i] = Math.max(0, Math.abs(b[i - 2] + b[i + 2] - 2 * b[i]) - 0.5 * Math.abs(b[i + 2] - b[i - 2]));
+      ly[i] = Math.max(0, Math.abs(b[i - 2 * w] + b[i + 2 * w] - 2 * b[i]) - 0.5 * Math.abs(b[i + 2 * w] - b[i - 2 * w])); }
+    return { w, h, gx, gy, lx, ly, b };
+  }
+  function pct(arr, p) { const a = Array.from(arr).sort((x, y) => x - y); return a[Math.floor(a.length * p)]; }
+  // box in full-res coords; returns {quad:[[x,y]x4] (TL,TR,BR,BL) full-res, score}
+  function lockQuad(rgba, W, H, box, opts) {
+    opts = opts || {}; const k = opts.k || Math.max(1, Math.round(box.s / 260));
+    const G = gradients(rgba, W, H, k); const x0 = box.x / k, y0 = box.y / k, s = box.s / k;
+    const R = s * (opts.range || 0.16), N = opts.steps || 29, offs = []; for (let i = 0; i < N; i++) offs.push(-R + 2 * R * i / (N - 1));
+    const n = 72, buf = new Float32Array(n);
+    const sides = [
+      { A: [x0, y0], B: [x0 + s, y0], nv: [0, 1], M: G.gy }, { A: [x0 + s, y0], B: [x0 + s, y0 + s], nv: [1, 0], M: G.gx },
+      { A: [x0, y0 + s], B: [x0 + s, y0 + s], nv: [0, 1], M: G.gy }, { A: [x0, y0], B: [x0, y0 + s], nv: [1, 0], M: G.gx } ];
+    const lineScore = (M, p0, p1) => { for (let i = 0; i < n; i++) { const t = 0.08 + 0.84 * i / (n - 1); const x = Math.round(p0[0] * (1 - t) + p1[0] * t), y = Math.round(p0[1] * (1 - t) + p1[1] * t); buf[i] = (x < 3 || y < 3 || x >= G.w - 3 || y >= G.h - 3) ? 0 : M[y * G.w + x]; } return pct(buf, 0.4); };
+    // top-K distinct candidate lines per side
+    const K = opts.topK || 4, cands = [];
+    for (const sd of sides) {
+      const all = [];
+      for (const da of offs) for (const db of offs) {
+        if (Math.abs(da - db) > 0.35 * s) continue;
+        const p0 = [sd.A[0] + sd.nv[0] * da, sd.A[1] + sd.nv[1] * da], p1 = [sd.B[0] + sd.nv[0] * db, sd.B[1] + sd.nv[1] * db];
+        all.push([lineScore(sd.M, p0, p1), p0, p1, da, db]);
+      }
+      all.sort((x, y) => y[0] - x[0]); const pick = [];
+      for (const c of all) { if (pick.every(p => Math.abs(p[3] - c[3]) + Math.abs(p[4] - c[4]) > 0.07 * s)) pick.push(c); if (pick.length >= K) break; }
+      cands.push(pick);
+    }
+    const inter = (l1, l2) => { const p = l1[1], d1 = [l1[2][0] - p[0], l1[2][1] - p[1]], r = l2[1], d2 = [l2[2][0] - r[0], l2[2][1] - r[1]]; const det = d1[0] * (-d2[1]) - (-d2[0]) * d1[1]; if (Math.abs(det) < 1e-9) return [p[0], p[1]]; const u = ((r[0] - p[0]) * (-d2[1]) - (-d2[0]) * (r[1] - p[1])) / det; return [p[0] + u * d1[0], p[1] + u * d1[1]]; };
+    const lerp = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+    const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+    let best = null;
+    for (const t of cands[0]) for (const r of cands[1]) for (const bo of cands[2]) for (const l of cands[3]) {
+      const q = [inter(t, l), inter(t, r), inter(bo, r), inter(bo, l)];
+      const L = [dist(q[0], q[1]), dist(q[1], q[2]), dist(q[2], q[3]), dist(q[3], q[0])], m = (L[0] + L[1] + L[2] + L[3]) / 4;
+      if (L.some(x => x < m * 0.85 || x > m * 1.18)) continue;
+      // inner seams at 1/3 and 2/3 (vertical seams use gx, horizontal use gy)
+      let seam = 0;
+      const SX = opts.seamMode === 'line' ? G.lx : G.gx, SY = opts.seamMode === 'line' ? G.ly : G.gy;
+      for (const f of [1 / 3, 2 / 3]) { seam += lineScore(SX, lerp(q[0], q[1], f), lerp(q[3], q[2], f)); seam += lineScore(SY, lerp(q[0], q[3], f), lerp(q[1], q[2], f)); }
+      const edge = t[0] + r[0] + bo[0] + l[0];
+      // dark plastic rim just outside each edge (hands / desk / background are lighter)
+      let rim = 0;
+      if (opts.rimW) {
+        const ctr = [(q[0][0] + q[2][0]) / 2, (q[0][1] + q[2][1]) / 2];
+        const band = (a, b, off) => { let sm = 0, n = 0; for (let i = 1; i < 12; i++) { const tt = i / 12; let x = a[0] + (b[0] - a[0]) * tt, y = a[1] + (b[1] - a[1]) * tt; x += (x - ctr[0]) * off; y += (y - ctr[1]) * off; const xi = Math.round(x), yi = Math.round(y); if (xi < 0 || yi < 0 || xi >= G.w || yi >= G.h) continue; sm += G.b[yi * G.w + xi]; n++; } return n ? sm / n : 0; };
+        for (const [a, b] of [[q[0], q[1]], [q[1], q[2]], [q[2], q[3]], [q[3], q[0]]]) rim += Math.max(-40, Math.min(60, band(a, b, -0.08) - band(a, b, 0.035)));
+        rim /= 4;
+      }
+      const sizePen = Math.abs(Math.log(m / s)) * 2;
+      const sc = ((opts.edgeW == null ? 1 : opts.edgeW) * edge / 4 + (opts.seamW == null ? 2 : opts.seamW) * seam / 4 + (opts.rimW || 0) * rim) * (1 - sizePen);
+      if (!best || sc > best.sc) best = { sc, q, edge: edge / 4, seam: seam / 4, m };
+    }
+    if (!best) { // fall back to the single best line per side
+      const q = [inter(cands[0][0], cands[3][0]), inter(cands[0][0], cands[1][0]), inter(cands[2][0], cands[1][0]), inter(cands[2][0], cands[3][0])];
+      best = { sc: 0, q, edge: 0, seam: 0, m: s };
+    }
+    const q = best.q.map(([x, y]) => [x * k, y * k]); const total = best.edge * 4;
+    const d = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+    const sidesLen = [d(q[0], q[1]), d(q[1], q[2]), d(q[2], q[3]), d(q[3], q[0])]; const mean = sidesLen.reduce((a, b) => a + b) / 4;
+    const ok = best.sc > 0 && mean > box.s * 0.6 && mean < box.s * 1.4;
+    // background edge level for a confidence ratio
+    const bg = pct(G.gx.filter((_, i) => i % 7 === 0), 0.6) + 1e-3;
+    return { quad: q, score: best.sc, conf: best.sc / bg, seam: best.seam / bg, ok, size: mean };
+  }
+  // perspective warp of an RGBA buffer quad -> size x size RGBA
+  function warpQuad(rgba, W, H, quad, size) {
+    const [x0, y0] = quad[0], [x1, y1] = quad[1], [x2, y2] = quad[2], [x3, y3] = quad[3];
+    const dx1 = x1 - x2, dx2 = x3 - x2, dx3 = x0 - x1 + x2 - x3, dy1 = y1 - y2, dy2 = y3 - y2, dy3 = y0 - y1 + y2 - y3;
+    let a, b, c, d, e, f, g, h;
+    if (Math.abs(dx3) < 1e-9 && Math.abs(dy3) < 1e-9) { a = x1 - x0; b = x2 - x1; c = x0; d = y1 - y0; e = y2 - y1; f = y0; g = 0; h = 0; }
+    else { const den = dx1 * dy2 - dx2 * dy1; g = (dx3 * dy2 - dx2 * dy3) / den; h = (dx1 * dy3 - dx3 * dy1) / den; a = x1 - x0 + g * x1; b = x3 - x0 + h * x3; c = x0; d = y1 - y0 + g * y1; e = y3 - y0 + h * y3; f = y0; }
+    const out = new Uint8ClampedArray(size * size * 4);
+    for (let yy = 0; yy < size; yy++) for (let xx = 0; xx < size; xx++) {
+      const u = (xx + 0.5) / size, v = (yy + 0.5) / size, w = g * u + h * v + 1; let sx = (a * u + b * v + c) / w - 0.5, sy = (d * u + e * v + f) / w - 0.5;
+      sx = Math.max(0, Math.min(W - 2, sx)); sy = Math.max(0, Math.min(H - 2, sy)); const ix = sx | 0, iy = sy | 0, fx = sx - ix, fy = sy - iy, o = (yy * size + xx) * 4, i0 = (iy * W + ix) * 4;
+      for (let ch = 0; ch < 3; ch++) out[o + ch] = (rgba[i0 + ch] * (1 - fx) + rgba[i0 + 4 + ch] * fx) * (1 - fy) + (rgba[i0 + W * 4 + ch] * (1 - fx) + rgba[i0 + W * 4 + 4 + ch] * fx) * fy;
+      out[o + 3] = 255;
+    }
+    return out;
+  }
+  // per-pixel median of aligned faces (removes a moving finger, reflections, noise)
+  function medianStack(faces, size) {
+    const n = faces.length, out = new Uint8ClampedArray(size * size * 4), v = new Array(n);
+    for (let i = 0; i < size * size * 4; i += 4) { for (let ch = 0; ch < 3; ch++) { for (let j = 0; j < n; j++) v[j] = faces[j][i + ch]; v.sort((a, b) => a - b); out[i + ch] = n % 2 ? v[(n - 1) / 2] : (v[n / 2 - 1] + v[n / 2]) / 2; } out[i + 3] = 255; }
+    return out;
+  }
+  E.lockQuad = lockQuad; E.warpQuad = warpQuad; E.medianStack = medianStack; E.gradients = gradients;
+})();

@@ -41,8 +41,9 @@ header h1 small{font-family:var(--f-body);font-weight:500;font-size:12px;color:v
 .chip .lbl{position:absolute;left:0;right:0;bottom:0;background:rgba(17,20,28,.72);font-size:10px;padding:1px 0;text-align:center;color:var(--paper)}
 #panel{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:8px;padding-bottom:max(10px,env(safe-area-inset-bottom,0px))}
 #viewport{position:relative;flex:1 1 auto;min-height:150px;border-radius:16px;overflow:hidden;background:#000;touch-action:none}
-#cam{position:absolute;inset:0;width:100%;height:100%}
-#cam.mirror{transform:scaleX(-1)}
+#cam,#vid{position:absolute;inset:0;width:100%;height:100%}
+#vid{object-fit:cover;background:#000}
+#cam.mirror,#vid.mirror{transform:scaleX(-1)}
 #guide{position:absolute;pointer-events:none;border-radius:10px;box-shadow:0 0 0 2000px rgba(8,10,14,.45);border:2px solid rgba(239,231,214,.85)}
 #guide::before,#guide::after{content:"";position:absolute;inset:0;background:
   linear-gradient(90deg,transparent calc(33.33% - 1px),rgba(239,231,214,.45) calc(33.33% - 1px),rgba(239,231,214,.45) calc(33.33% + 1px),transparent calc(33.33% + 1px),transparent calc(66.66% - 1px),rgba(239,231,214,.45) calc(66.66% - 1px),rgba(239,231,214,.45) calc(66.66% + 1px),transparent calc(66.66% + 1px))}
@@ -163,6 +164,7 @@ body.scanning #viewport{min-height:min(52vh,460px)}
     <!-- scan / calibrate -->
     <div id="scanArea" style="display:flex;flex-direction:column;gap:8px;flex:1 1 auto;min-height:0">
       <div id="viewport">
+        <video id="vid" playsinline muted autoplay hidden></video>
         <canvas id="cam"></canvas>
         <div id="guide"><svg id="gprog" viewBox="0 0 100 100" preserveAspectRatio="none"><rect x="1" y="1" width="98" height="98" rx="4" pathLength="100" fill="none" stroke-width="2.4" vector-effect="non-scaling-stroke"/></svg></div>
         <div id="reviewPane" hidden><canvas id="reviewCanvas" width="300" height="300"></canvas><div id="reviewMsg"></div></div>
@@ -181,9 +183,9 @@ body.scanning #viewport{min-height:min(52vh,460px)}
           <button class="btn small" id="btnCalRot">↻ 轉 90°</button>
         </div>
       </div>
-      <div class="row">
+      <div class="row" id="rowCam">
         <button class="btn" id="btnPhoto">拍照 / 選照片</button>
-        <button class="btn" id="btnCapture">手動擷取</button>
+        <button class="btn" id="btnCapture">拍這一面</button>
         <button class="btn small ghost" id="btnFlip" aria-label="切換前後鏡頭">⇄ 鏡頭</button>
       </div>
       <div class="row" id="rowReview" hidden>
@@ -484,11 +486,11 @@ function updateProgress(){
 }
 
 // ---------------- camera & viewport ----------------
-const cam=$('cam'), ctx=cam.getContext('2d',{willReadFrequently:true}); let video=null;
+const cam=$('cam'), octx=cam.getContext('2d'); const acan=document.createElement('canvas'), ctx=acan.getContext('2d',{willReadFrequently:true}); let video=null;
 function guideRect(){ const w=cam.width,h=cam.height; const s=Math.round(Math.min(w,h)*0.84); return { x:Math.round((w-s)/2), y:Math.round((h-s)/2), s }; }
 function layoutGuide(){
   const vp=$('viewport'); const dpr=Math.min(2,window.devicePixelRatio||1);
-  cam.width=Math.round(vp.clientWidth*dpr); cam.height=Math.round(vp.clientHeight*dpr);
+  cam.width=acan.width=Math.round(vp.clientWidth*dpr); cam.height=acan.height=Math.round(vp.clientHeight*dpr);
   const g=guideRect(); const gd=$('guide'); gd.style.left=(g.x/dpr)+'px'; gd.style.top=(g.y/dpr)+'px'; gd.style.width=(g.s/dpr)+'px'; gd.style.height=(g.s/dpr)+'px';
 }
 async function startCamera(){
@@ -497,8 +499,9 @@ async function startCamera(){
   if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ return camFail('這個瀏覽器不支援直接開相機。'); }
   try{
     S.stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:S.facing, width:{ideal:1280}, height:{ideal:1280} }, audio:false });
-    video=document.createElement('video'); video.playsInline=true; video.muted=true; video.setAttribute('playsinline',''); video.srcObject=S.stream; await video.play();
-    cam.classList.toggle('mirror', S.facing==='user');
+    video=$('vid'); video.muted=true; video.playsInline=true; video.srcObject=S.stream; video.hidden=false; try{ await video.play(); }catch(e){}
+    octx.clearRect(0,0,cam.width,cam.height);
+    cam.classList.toggle('mirror', S.facing==='user'); video.classList.toggle('mirror', S.facing==='user');
     if(S.mode==='calib') setStatus('對準後按「手動擷取」'); else if(S.method==='jigsaw'){ if(!S.jstate||S.jstate==='scan') jStartFace(); } else setStatus('把方塊的任一面放進框內');
   }catch(e){ console.warn(e); camFail(e && e.name==='NotAllowedError' ? '相機權限被拒絕，或這個頁面所在的環境不允許使用相機。' : '無法開啟相機（'+(e&&e.name||e)+'）。'); }
 }
@@ -510,13 +513,13 @@ function camFail(msg){
   const b2=document.createElement('button'); b2.className='btn small'; b2.textContent='再試一次開相機'; b2.onclick=startCamera; m.appendChild(b2);
   setStatus('');
 }
-function stopCamera(){ if(S.stream){ S.stream.getTracks().forEach(t=>t.stop()); S.stream=null; } video=null; }
+function stopCamera(){ if(S.stream){ S.stream.getTracks().forEach(t=>t.stop()); S.stream=null; } const v=$('vid'); v.srcObject=null; v.hidden=true; video=null; }
 function drawFrame(){
   const w=cam.width,h=cam.height; if(!w||!h) return false;
   if(S.srcImg){
     const im=S.srcImg, t=S.imgT; const base=Math.max(w/im.width,h/im.height)*t.s;
-    ctx.fillStyle='#000'; ctx.fillRect(0,0,w,h);
-    ctx.drawImage(im, (w-im.width*base)/2 + t.x, (h-im.height*base)/2 + t.y, im.width*base, im.height*base); return true;
+    for(const c of [ctx, octx]){ c.fillStyle='#000'; c.fillRect(0,0,w,h); c.drawImage(im, (w-im.width*base)/2 + t.x, (h-im.height*base)/2 + t.y, im.width*base, im.height*base); }
+    return true;
   }
   if(video && video.readyState>=2){
     const vw=video.videoWidth, vh=video.videoHeight; const sc=Math.max(w/vw,h/vh);
@@ -569,17 +572,17 @@ async function captureNow(auto){
     if(!drawFrame()){ toast('還沒有畫面'); return; }
     const reg=grabRegion();
     if(S.mode==='calib'){
-      const c=canvasOf(FACE_PX,FACE_PX); c.getContext('2d').drawImage(cam, reg.ox+reg.box.x, reg.oy+reg.box.y, reg.box.s, reg.box.s, 0,0,FACE_PX,FACE_PX);
+      const c=canvasOf(FACE_PX,FACE_PX); c.getContext('2d').drawImage(acan, reg.ox+reg.box.x, reg.oy+reg.box.y, reg.box.s, reg.box.s, 0,0,FACE_PX,FACE_PX);
       S.calibSlots[S.calibCur]=c; S.calibRot[S.calibCur]=0; vibrate(40);
       const i=CAL_ORDER.indexOf(S.calibCur); const nxt=CAL_ORDER.find((f,j)=>j>i && !S.calibSlots[f]) || CAL_ORDER.find(f=>!S.calibSlots[f]);
       if(nxt) S.calibCur=nxt; renderCalib(); spinToFace(F.indexOf(S.calibCur)); return;
     }
-    if(S.method==='jigsaw'){ if(S.jstate!=='scan') { if(S.jstate==='turn') jStartFace(); return; } const fr=BURST.frames.length>=2? BURST.frames.map(b=>b.reg): [reg]; const cms=BURST.frames.map(b=>b.cm); resetBurst(); await jFinishFace(fr, cms); return; }
+    if(S.method==='jigsaw'){ if(S.jstate!=='scan') { if(S.jstate==='turn') jStartFace(); return; } const fr=BURST.frames.length>=2? BURST.frames.slice() : [Object.assign(lockFrame(reg),{cm:cellMeans(E.extractPatches(reg.d,reg.w,reg.h,reg.box.x,reg.box.y,reg.box.s))})]; resetBurst(); await jFinishFrames(fr); return; }
     if(!S.ref) return;
     setStatus('擷取中…'); setRing(1,'#86c39a');
     await sleep(10);
     const rf=E.refineBox(S.ref, reg.d, reg.w, reg.h, reg.box);
-    const c=canvasOf(FACE_PX,FACE_PX); c.getContext('2d').drawImage(cam, reg.ox+rf.box.x, reg.oy+rf.box.y, rf.box.s, rf.box.s, 0,0,FACE_PX,FACE_PX);
+    const c=canvasOf(FACE_PX,FACE_PX); c.getContext('2d').drawImage(acan, reg.ox+rf.box.x, reg.oy+rf.box.y, rf.box.s, rf.box.s, 0,0,FACE_PX,FACE_PX);
     addCapture(c, auto);
   } finally { S.capturing=false; }
 }
@@ -621,7 +624,8 @@ $('btnPhoto').onclick=()=>$('filePhoto').click();
 $('filePhoto').onchange=async e=>{
   const f=e.target.files[0]; e.target.value=''; if(!f) return;
   const url=URL.createObjectURL(f); const img=await loadImg(url);
-  stopCamera(); S.srcImg=img; S.imgT={s:1,x:0,y:0}; $('zoom').value=1; $('zoomBar').hidden=false; $('camMsg').hidden=true; cam.classList.remove('mirror');
+  stopCamera(); S.srcImg=img; S.srcLive=false; S.imgT={s:1,x:0,y:0}; $('zoom').value=1; $('zoomBar').hidden=false; $('camMsg').hidden=true; cam.classList.remove('mirror');
+  if(S.method==='jigsaw' && S.mode==='scan' && S.jstate==='scan'){ $('zoomBar').hidden=true; await sleep(60); drawFrame(); const reg=grabRegion(); await jFinishFrames([lockFrame(reg)]); return; }
   setStatus('拖曳 / 縮放照片，讓方塊對齊方框', '對好後按「手動擷取」');
 };
 (function(){ const vp=$('viewport'); let d=null;
@@ -846,11 +850,13 @@ function setJState(st){
   const jig = S.method==='jigsaw' && S.mode==='scan';
   $('rowReview').hidden = !(jig && st==='review');
   $('rowTurn').hidden = !(jig && st==='turn');
+  $('rowCam').hidden = jig && (st==='review'||st==='turn');
+  $('rowScan').hidden = jig && (st==='review'||st==='turn');
   $('reviewPane').hidden = !(jig && st==='review');
   $('turnHint').hidden = !(jig && st==='turn');
-  if(st!=='scan') setFaceProgress(0);
+  if(st!=='scan'){ setFaceProgress(0); if(typeof clearLock==='function') clearLock(); }
 }
-function resetBurst(){ BURST.frames=[]; BURST.miss=0; BURST.maxSharp=0; setFaceProgress(0); }
+function resetBurst(){ BURST.frames=[]; BURST.miss=0; BURST.maxSharp=0; S.qhist=[]; S.qmed=null; setFaceProgress(0); }
 // --- whole-cube hold orientation for each scan step (what faces the camera) ---
 const VIEW_Q = ()=> new THREE.Quaternion().setFromEuler(new THREE.Euler(0.38,-0.48,0,'XYZ'));
 function holdQ(f){
@@ -891,18 +897,33 @@ function jStartFace(){
   setStatus('掃描「'+J_NAMES[nx]+'」面', '把這一面放進框內，框線跑滿就完成');
 }
 // stack the collected frames of this face, then freeze for review
-async function jFinishFace(regs, cms){
-  const f=jNext(); if(!f) return;
+// lock onto the cube face in one analysed region -> straightened face
+function lockFrame(reg, steps, box, range){
+  const L=E.lockQuad(reg.d, reg.w, reg.h, box||reg.box, {steps: steps||29, range: range||0.16});
+  const face=E.warpQuad(reg.d, reg.w, reg.h, L.quad, FACE_PX);
+  return { reg, quad:L.quad, ok:L.ok, size:L.size, face, sh:E.sharpness({d:face,w:FACE_PX,h:FACE_PX}) };
+}
+function rgbaToCanvas(d,w,h){ const c=canvasOf(w,h); c.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(d),w,h),0,0); return c; }
+// frames: [{reg, quad, face(rgba 300x300), sh, cm?}] -> median-stacked face, then review
+async function jFinishFrames(frames){
+  const f=jNext(); if(!f || !frames.length) return;
   setStatus('整理照片中…'); await sleep(10);
-  const st = regs.length>1 ? E.stackFrames(regs.map(r=>({d:r.d,w:r.w,h:r.h}))) : {d:regs[0].d,w:regs[0].w,h:regs[0].h,used:1};
-  const reg = { d: st.d, w: st.w, h: st.h, box: regs[0].box };
-  const src=canvasOf(reg.w,reg.h); src.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(reg.d), reg.w, reg.h),0,0);
-  const al=E.alignGrid(reg.d, reg.w, reg.h, reg.box);
-  S.jpending={ f, src, quad:boxQuad(al.box), used:st.used, live: cms && cms.length ? cms[Math.floor(cms.length/2)] : null };
+  // keep only the largest group of frames that agree with each other (medoid), then median-stack them
+  if(frames.length>3){
+    const fd=(A,B)=>{ let d=0; for(let i=0;i<A.length;i+=24) d+=Math.abs(A[i]-B[i])+Math.abs(A[i+1]-B[i+1])+Math.abs(A[i+2]-B[i+2]); return d; };
+    const D=frames.map(a=>frames.map(b=>a===b?0:fd(a.face,b.face)));
+    let mi=0, ms=Infinity; D.forEach((row,i)=>{ const s=row.reduce((x,y)=>x+y,0); if(s<ms){ ms=s; mi=i; } });
+    const dm=D[mi].filter((_,j)=>j!==mi).sort((x,y)=>x-y); const lim=dm[Math.floor(dm.length/2)]*1.25+1;
+    const keep=frames.filter((_,j)=>j===mi || D[mi][j]<=lim); if(keep.length>=2) frames=keep;
+  }
+  let stacked = frames.length>2 ? E.medianStack(frames.map(x=>x.face), FACE_PX) : frames[0].face;
+  const best = frames.reduce((a,b)=> b.sh>a.sh?b:a);
+  const cms = frames.map(x=>x.cm).filter(Boolean);
+  S.jpending={ f, src:rgbaToCanvas(best.reg.d,best.reg.w,best.reg.h), quad:best.quad.map(p=>p.slice()), face:rgbaToCanvas(stacked,FACE_PX,FACE_PX), used:frames.length, live: cms.length ? cms[Math.floor(cms.length/2)] : null };
   showReview();
 }
 function showReview(){
-  const P=S.jpending; const face=warpFace(P.src, P.quad, FACE_PX); P.face=face; P.patches=patchesOfCanvas(face);
+  const P=S.jpending; if(!P.face) P.face=warpFace(P.src, P.quad, FACE_PX); const face=P.face; P.patches=patchesOfCanvas(face);
   const c=$('reviewCanvas'), x=c.getContext('2d'); x.drawImage(face,0,0,300,300); x.strokeStyle='rgba(201,164,92,.85)'; x.lineWidth=2; for(const t of [100,200]){ x.beginPath(); x.moveTo(t,0); x.lineTo(t,300); x.moveTo(0,t); x.lineTo(300,t); x.stroke(); }
   const prev=J_ORDER.filter(g=>S.jf[g]&&g!==P.f);
   const dup=prev.find(g=>faceDiff(P.patches,S.jf[g].patches)<T.dupDiff*1.3);
@@ -940,23 +961,51 @@ function jTick(pats, motion, reg){
     return;
   }
   if(S.jstate!=='scan') return;
-  if(!present){ if(++BURST.miss>=4) resetBurst(); $('guide').className=''; setStatus('掃描「'+J_NAMES[jNext()]+'」面','把這一面放進框內，框線跑滿就完成'); return; }
-  BURST.miss=0; $('guide').className='ready';
+  if(!present){ if(++BURST.miss>=4) resetBurst(); clearLock(); $('guide').className=''; setStatus('掃描「'+J_NAMES[jNext()]+'」面','把這一面放進框內，出現綠框就是鎖定了，會自動連拍'); return; }
+  BURST.miss=0;
   const cm=cellMeans(pats);
-  // the face in view changed (user turned too early)? restart this face
-  if(BURST.frames.length && coarseDiff(cm,BURST.frames[0].cm,true)>0.1) resetBurst();
-  if(motion<T.burstMaxMotion){
-    const sh=E.sharpness({d:reg.d,w:reg.w,h:reg.h});
-    BURST.maxSharp=Math.max(BURST.maxSharp,sh);
-    BURST.frames.push({reg, cm, sh});
-    // keep only frames that are reasonably sharp compared with the best seen
-    BURST.frames=BURST.frames.filter(f=>f.sh>=BURST.maxSharp*0.55).slice(-T.faceNeed);
+  if(BURST.frames.length && coarseDiff(cm,BURST.frames[0].cm,true)>0.12) resetBurst();   // a different face came into view
+  // track: once locked, search around the consensus outline of recent frames
+  let tb=null; if(T.track && S.qmed && S.qmedAge<4){ const q=S.qmed; const cx=(q[0][0]+q[1][0]+q[2][0]+q[3][0])/4, cy=(q[0][1]+q[1][1]+q[2][1]+q[3][1])/4; const sz=(Math.hypot(q[1][0]-q[0][0],q[1][1]-q[0][1])+Math.hypot(q[2][0]-q[1][0],q[2][1]-q[1][1]))/2; tb={x:cx-sz/2,y:cy-sz/2,s:sz}; }
+  const fr=lockFrame(reg, 29, tb, tb?0.1:0.16); fr.cm=cm;
+  // consensus of recent locks: reject a frame whose outline jumps away from the others
+  S.qhist=(S.qhist||[]); S.qhist.push(fr.quad); if(S.qhist.length>7) S.qhist.shift();
+  let consistent=true;
+  if(S.qhist.length>=3){ const med=[0,1,2,3].map(c=>[0,1].map(a=>{ const v=S.qhist.map(q=>q[c][a]).sort((x,y)=>x-y); return v[Math.floor(v.length/2)]; }));
+    // shake moves the cube but doesn't change its shape: compare the 4 side lengths with the recent median
+    const sides=q=>[0,1,2,3].map(i=>Math.hypot(q[(i+1)%4][0]-q[i][0], q[(i+1)%4][1]-q[i][1]));
+    const ms=[0,1,2,3].map(i=>{ const v=S.qhist.map(q=>sides(q)[i]).sort((x,y)=>x-y); return v[Math.floor(v.length/2)]; });
+    const fs=sides(fr.quad), msz=(ms[0]+ms[1]+ms[2]+ms[3])/4;
+    const shapeDev=Math.max(...fs.map((L,i)=>Math.abs(L-ms[i])))/msz;
+    const posDev=Math.max(...fr.quad.map((p,c)=>Math.hypot(p[0]-med[c][0],p[1]-med[c][1])))/msz;
+    // and between consecutive accepted frames the cube only moves a little
+    const last=BURST.frames.length ? BURST.frames[BURST.frames.length-1].quad : null;
+    const jump= last ? Math.max(...fr.quad.map((p,c)=>Math.hypot(p[0]-last[c][0],p[1]-last[c][1])))/msz : 0;
+    consistent = shapeDev < 0.035 && posDev < 0.12 && jump < 0.1; S.qmed=med; S.qmedAge=0; }
+  else S.qmedAge=(S.qmedAge||0)+1;
+  const good = fr.ok && consistent && motion<T.burstMaxMotion;
+  drawLock(reg, fr.quad, good ? '#86c39a' : '#e3a95d');
+  $('guide').className = good ? 'armed' : 'ready';
+  if(good){
+    BURST.maxSharp=Math.max(BURST.maxSharp,fr.sh); BURST.frames.push(fr);
+    BURST.frames=BURST.frames.filter(x=>x.sh>=BURST.maxSharp*0.55).slice(-T.faceNeed);
   }
   const frac=BURST.frames.length/T.faceNeed; setFaceProgress(frac);
-  setStatus(frac<0.4?'對準中…':'很好，再一下…', '輕微晃動沒關係，模糊的照片會自動丟掉');
-  if(BURST.frames.length>=T.faceNeed){ const fr=BURST.frames.map(b=>b.reg), cms=BURST.frames.map(b=>b.cm); resetBurst(); captureBurst(fr, cms); }
+  setStatus(good ? (frac<0.5?'已鎖定方塊，連拍中…':'很好，再一下…') : '對準中…', good ? '綠框貼著方塊邊緣就對了' : '讓方塊這一面大約填滿方框');
+  if(BURST.frames.length>=T.faceNeed){ const frs=BURST.frames.slice(); resetBurst(); captureBurst(frs); }
 }
-async function captureBurst(frames, cms){ if(S.capturing) return; S.capturing=true; try{ await jFinishFace(frames, cms); } finally { S.capturing=false; } }
+async function captureBurst(frames){ if(S.capturing) return; S.capturing=true; clearLock(); try{ await jFinishFrames(frames); } finally { S.capturing=false; } }
+// live lock outline over the camera picture
+function drawLock(reg, quad, color){
+  if(S.srcImg) return; const c=octx; c.clearRect(0,0,cam.width,cam.height);
+  c.strokeStyle=color; c.lineWidth=Math.max(3, cam.width/160); c.lineJoin='round'; c.beginPath();
+  quad.forEach(([x,y],i)=>{ const X=reg.ox+x, Y=reg.oy+y; i?c.lineTo(X,Y):c.moveTo(X,Y); }); c.closePath(); c.stroke();
+  // inner grid
+  c.lineWidth=Math.max(1.5, cam.width/400); c.globalAlpha=0.6; const L=(a,b,t)=>[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t];
+  for(const t of [1/3,2/3]){ let p=L(quad[0],quad[1],t), q=L(quad[3],quad[2],t); c.beginPath(); c.moveTo(reg.ox+p[0],reg.oy+p[1]); c.lineTo(reg.ox+q[0],reg.oy+q[1]); c.stroke(); p=L(quad[0],quad[3],t); q=L(quad[1],quad[2],t); c.beginPath(); c.moveTo(reg.ox+p[0],reg.oy+p[1]); c.lineTo(reg.ox+q[0],reg.oy+q[1]); c.stroke(); }
+  c.globalAlpha=1;
+}
+function clearLock(){ if(!S.srcImg) octx.clearRect(0,0,cam.width,cam.height); }
 // ---- adjust sheet: drag 4 corners ----
 let ADJ=null;
 function openAdjust(f){
@@ -985,7 +1034,7 @@ function drawAdjust(){
 })();
 $('btnAdjRot').onclick=()=>{ const q=ADJ.quad; ADJ.quad=[q[3],q[0],q[1],q[2]]; drawAdjust(); };
 $('btnAdjRetake').onclick=()=>{ if(ADJ.f==='pending'){ $('sheetAdj').hidden=true; S.jpending=null; jShowScanCube(); jStartFace(); return; } delete S.jf[ADJ.f]; if(S.doneLive) delete S.doneLive[ADJ.f]; $('sheetAdj').hidden=true; jShowScanCube(); jRenderChips(); jRenderRemain(); jUpdateProgress(); jStartFace(); toast('請重拍「'+J_NAMES[ADJ.f]+'」面（注意拿的方向）'); };
-$('btnAdjDone').onclick=()=>{ if(ADJ.f==='pending'){ S.jpending.quad=ADJ.quad; $('sheetAdj').hidden=true; showReview(); return; } jSetFace(ADJ.f, ADJ.src, ADJ.quad); $('sheetAdj').hidden=true; jShowScanCube(); jRenderChips(); };
+$('btnAdjDone').onclick=()=>{ if(ADJ.f==='pending'){ S.jpending.quad=ADJ.quad; S.jpending.face=null; $('sheetAdj').hidden=true; showReview(); return; } jSetFace(ADJ.f, ADJ.src, ADJ.quad); $('sheetAdj').hidden=true; jShowScanCube(); jRenderChips(); };
 $('sheetAdj').addEventListener('click',e=>{ if(e.target.id==='sheetAdj') $('sheetAdj').hidden=true; });
 
 // ---- solving in a background worker ----
