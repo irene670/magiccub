@@ -15,10 +15,10 @@
   --f-mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
   color-scheme:dark;
 }
-html,body{height:100%}
+html,body{height:100%;width:100%;overflow:hidden;overscroll-behavior:none}
 body{background:var(--ink);color:var(--paper);font-family:var(--f-body);font-size:15px;margin:0;overflow:hidden;-webkit-tap-highlight-color:transparent}
 button{font-family:inherit}
-#app{height:100%;display:flex;flex-direction:column;max-width:560px;margin:0 auto;padding-left:max(12px,env(safe-area-inset-left,0px));padding-right:max(12px,env(safe-area-inset-right,0px));box-sizing:border-box}
+#app{height:100%;height:100dvh;width:100%;display:flex;flex-direction:column;max-width:560px;margin:0 auto;padding-left:max(12px,env(safe-area-inset-left,0px));padding-right:max(12px,env(safe-area-inset-right,0px));box-sizing:border-box}
 header{display:flex;align-items:center;gap:10px;padding-block:10px 6px}
 header h1{font-family:var(--f-display);font-weight:800;font-size:19px;letter-spacing:.04em;margin:0;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 header h1 small{font-family:var(--f-body);font-weight:500;font-size:12px;color:var(--muted);letter-spacing:.08em;margin-left:6px}
@@ -40,16 +40,19 @@ header h1 small{font-family:var(--f-body);font-weight:500;font-size:12px;color:v
 .chip.next{border-color:var(--paper);border-style:solid}
 .chip .lbl{position:absolute;left:0;right:0;bottom:0;background:rgba(17,20,28,.72);font-size:10px;padding:1px 0;text-align:center;color:var(--paper)}
 #panel{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:8px;padding-bottom:max(10px,env(safe-area-inset-bottom,0px))}
-#viewport{position:relative;flex:1 1 auto;min-height:150px;border-radius:16px;overflow:hidden;background:#000;touch-action:none}
+#viewport{position:relative;flex:1 1 auto;min-height:120px;border-radius:16px;overflow:hidden;background:#000;touch-action:none}
 #cam,#vid{position:absolute;inset:0;width:100%;height:100%}
 #vid{object-fit:cover;background:#000}
 #cam.mirror,#vid.mirror{transform:scaleX(-1)}
-#guide{position:absolute;pointer-events:none;border-radius:10px;box-shadow:0 0 0 2000px rgba(8,10,14,.45);border:2px solid rgba(239,231,214,.85)}
-#guide::before,#guide::after{content:"";position:absolute;inset:0;background:
-  linear-gradient(90deg,transparent calc(33.33% - 1px),rgba(239,231,214,.45) calc(33.33% - 1px),rgba(239,231,214,.45) calc(33.33% + 1px),transparent calc(33.33% + 1px),transparent calc(66.66% - 1px),rgba(239,231,214,.45) calc(66.66% - 1px),rgba(239,231,214,.45) calc(66.66% + 1px),transparent calc(66.66% + 1px))}
-#guide::after{transform:rotate(90deg)}
-#guide.ready{border-color:var(--gold)}
-#guide.ok{border-color:var(--ok)}
+#guide{position:absolute;pointer-events:none;border-radius:10px;box-shadow:0 0 0 2000px rgba(8,10,14,.38);border:0;
+  background:
+   linear-gradient(var(--gc),var(--gc)) left top/34px 3px no-repeat, linear-gradient(var(--gc),var(--gc)) left top/3px 34px no-repeat,
+   linear-gradient(var(--gc),var(--gc)) right top/34px 3px no-repeat, linear-gradient(var(--gc),var(--gc)) right top/3px 34px no-repeat,
+   linear-gradient(var(--gc),var(--gc)) left bottom/34px 3px no-repeat, linear-gradient(var(--gc),var(--gc)) left bottom/3px 34px no-repeat,
+   linear-gradient(var(--gc),var(--gc)) right bottom/34px 3px no-repeat, linear-gradient(var(--gc),var(--gc)) right bottom/3px 34px no-repeat;
+  --gc:rgba(239,231,214,.9)}
+#guide.ready{--gc:var(--gold)}
+#guide.ok{--gc:var(--ok)}
 #ring{position:absolute;right:10px;top:10px;width:44px;height:44px}
 #status{position:absolute;left:10px;right:62px;top:10px;font-size:15px;font-weight:700;text-shadow:0 1px 3px #000;line-height:1.35}
 #status small{display:block;font-weight:400;font-size:12px;color:#d8d0bf}
@@ -116,15 +119,23 @@ header h1 small{font-family:var(--f-body);font-weight:500;font-size:12px;color:v
 .seg b{display:block;font-size:14px}
 @media (prefers-reduced-motion:reduce){.spin{animation:none}}
 @media (max-height:640px){#stage{height:30vh}.steps{display:none}}
-body.scanning #stage{height:min(20vh,180px);transition:height .3s}
-body.scanning.turning #stage{height:min(34vh,300px)}
+body.scanning #stage{transition:height .3s}
+body.scanning.turning #stage{height:min(30dvh,260px)}
 body.turning #stageHint{display:none}
 body.scanning .chips{padding-block:6px;gap:5px}
 body.scanning .chip{border-radius:8px}
-body.scanning #viewport{min-height:min(52vh,460px)}
+body.scanning #stage{height:min(15dvh,130px)}
+body.scanning .chip{aspect-ratio:auto;height:40px}
+body.scanning .chips{padding-block:5px}
+body.scanning header{padding-block:6px 2px}
+body.scanning header h1{font-size:17px}
+body.scanning .steps{display:none}
+body.scanning .btn{min-height:42px;font-size:14px}
+body.scanning #panel{gap:6px}
+body.scanning .remain{min-height:0;font-size:12px;line-height:1.35}
 #gprog{position:absolute;inset:-3px;width:calc(100% + 6px);height:calc(100% + 6px);overflow:visible}
 #gprog rect{stroke:var(--gold);stroke-dasharray:100;stroke-dashoffset:100;transition:stroke-dashoffset .15s linear}
-#guide.armed{border-color:rgba(239,231,214,.5)}
+#guide.armed{--gc:rgba(239,231,214,.5)}
 #reviewPane{position:absolute;inset:0;background:var(--wall);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:12px}
 #reviewCanvas{width:min(78%,300px);aspect-ratio:1;height:auto;border-radius:10px;border:2px solid var(--gold)}
 #reviewMsg{font-size:14px;text-align:center;line-height:1.5;max-width:30em}
@@ -294,7 +305,7 @@ const CAL_HOW = {
   D:'回到正面朝鏡頭，把底部往鏡頭方向翻起：底面對著鏡頭，原本的正面在畫面上方。'
 };
 const CELL = 100, FACE_PX = 300;
-const T = { newFace: 0.07, faceNeed: 8, burstNeed: 5, burstMaxMotion: 0.25, dupDiff: 0.06, tex: 0.035, fit: 0.42, motion: 0.022, stableFrames: 6, dupSim: 0.6, dupSameId: 0.8 };
+const T = { lockConf: 7, newFace: 0.07, faceNeed: 8, burstNeed: 5, burstMaxMotion: 0.25, dupDiff: 0.06, tex: 0.035, fit: 0.42, motion: 0.022, stableFrames: 6, dupSim: 0.6, dupSameId: 0.8 };
 
 // ---------------- state ----------------
 const S = {
@@ -856,7 +867,7 @@ function setJState(st){
   $('turnHint').hidden = !(jig && st==='turn');
   if(st!=='scan'){ setFaceProgress(0); if(typeof clearLock==='function') clearLock(); }
 }
-function resetBurst(){ BURST.frames=[]; BURST.miss=0; BURST.maxSharp=0; S.qhist=[]; S.qmed=null; setFaceProgress(0); }
+function resetBurst(){ BURST.frames=[]; BURST.miss=0; BURST.maxSharp=0; S.qhist=[]; S.qmed=null; S.lockStreak=0; S.lockMiss=0; S.dispQ=null; S.lastGood=null; setFaceProgress(0); }
 // --- whole-cube hold orientation for each scan step (what faces the camera) ---
 const VIEW_Q = ()=> new THREE.Quaternion().setFromEuler(new THREE.Euler(0.38,-0.48,0,'XYZ'));
 function holdQ(f){
@@ -900,8 +911,9 @@ function jStartFace(){
 // lock onto the cube face in one analysed region -> straightened face
 function lockFrame(reg, steps, box, range){
   const L=E.lockQuad(reg.d, reg.w, reg.h, box||reg.box, {steps: steps||29, range: range||0.16});
+  const conf=L.conf;
   const face=E.warpQuad(reg.d, reg.w, reg.h, L.quad, FACE_PX);
-  return { reg, quad:L.quad, ok:L.ok, size:L.size, face, sh:E.sharpness({d:face,w:FACE_PX,h:FACE_PX}) };
+  return { reg, quad:L.quad, ok:L.ok && conf>=T.lockConf, conf, size:L.size, face, sh:E.sharpness({d:face,w:FACE_PX,h:FACE_PX}) };
 }
 function rgbaToCanvas(d,w,h){ const c=canvasOf(w,h); c.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(d),w,h),0,0); return c; }
 // frames: [{reg, quad, face(rgba 300x300), sh, cm?}] -> median-stacked face, then review
@@ -913,7 +925,7 @@ async function jFinishFrames(frames){
     const fd=(A,B)=>{ let d=0; for(let i=0;i<A.length;i+=24) d+=Math.abs(A[i]-B[i])+Math.abs(A[i+1]-B[i+1])+Math.abs(A[i+2]-B[i+2]); return d; };
     const D=frames.map(a=>frames.map(b=>a===b?0:fd(a.face,b.face)));
     let mi=0, ms=Infinity; D.forEach((row,i)=>{ const s=row.reduce((x,y)=>x+y,0); if(s<ms){ ms=s; mi=i; } });
-    const dm=D[mi].filter((_,j)=>j!==mi).sort((x,y)=>x-y); const lim=dm[Math.floor(dm.length/2)]*1.25+1;
+    const dm=D[mi].filter((_,j)=>j!==mi).sort((x,y)=>x-y); const lim=Math.min(dm[Math.floor(dm.length/2)]*1.25, dm[0]*1.8)+1;
     const keep=frames.filter((_,j)=>j===mi || D[mi][j]<=lim); if(keep.length>=2) frames=keep;
   }
   let stacked = frames.length>2 ? E.medianStack(frames.map(x=>x.face), FACE_PX) : frames[0].face;
@@ -965,33 +977,36 @@ function jTick(pats, motion, reg){
   BURST.miss=0;
   const cm=cellMeans(pats);
   if(BURST.frames.length && coarseDiff(cm,BURST.frames[0].cm,true)>0.12) resetBurst();   // a different face came into view
-  // track: once locked, search around the consensus outline of recent frames
-  let tb=null; if(T.track && S.qmed && S.qmedAge<4){ const q=S.qmed; const cx=(q[0][0]+q[1][0]+q[2][0]+q[3][0])/4, cy=(q[0][1]+q[1][1]+q[2][1]+q[3][1])/4; const sz=(Math.hypot(q[1][0]-q[0][0],q[1][1]-q[0][1])+Math.hypot(q[2][0]-q[1][0],q[2][1]-q[1][1]))/2; tb={x:cx-sz/2,y:cy-sz/2,s:sz}; }
-  const fr=lockFrame(reg, 29, tb, tb?0.1:0.16); fr.cm=cm;
-  // consensus of recent locks: reject a frame whose outline jumps away from the others
-  S.qhist=(S.qhist||[]); S.qhist.push(fr.quad); if(S.qhist.length>7) S.qhist.shift();
+  // acquire: try the guide size and two smaller sizes (cube held further away); once locked, track it
+  let tb=null, rng=0.16;
+  if(S.lockStreak>=1 && S.dispQ){ const q=S.dispQ; const cx=(q[0][0]+q[1][0]+q[2][0]+q[3][0])/4, cy=(q[0][1]+q[1][1]+q[2][1]+q[3][1])/4; const sz=(Math.hypot(q[1][0]-q[0][0],q[1][1]-q[0][1])+Math.hypot(q[2][0]-q[1][0],q[2][1]-q[1][1]))/2; tb={x:cx-sz/2,y:cy-sz/2,s:sz}; rng=0.08; }
+  let fr;
+  if(tb){ fr=lockFrame(reg, 27, tb, rng); }
+  else { // searching: try three sizes in this frame, keep the most confident lock
+    const b=reg.box; let best=null;
+    for(const k of [1,0.84]){ const s2=b.s*k; const t2={x:b.x+(b.s-s2)/2, y:b.y+(b.s-s2)/2, s:s2}; const f2=lockFrame(reg, 25, t2, 0.16); f2.tb=t2; if(!best || f2.conf>best.conf) best=f2; }
+    fr=best; tb=best.tb;
+  }
+  fr.cm=cm;
+  // consistency with the previous good frame: shake moves the cube but keeps its shape and size
+  const sides=q=>[0,1,2,3].map(i=>Math.hypot(q[(i+1)%4][0]-q[i][0], q[(i+1)%4][1]-q[i][1]));
   let consistent=true;
-  if(S.qhist.length>=3){ const med=[0,1,2,3].map(c=>[0,1].map(a=>{ const v=S.qhist.map(q=>q[c][a]).sort((x,y)=>x-y); return v[Math.floor(v.length/2)]; }));
-    // shake moves the cube but doesn't change its shape: compare the 4 side lengths with the recent median
-    const sides=q=>[0,1,2,3].map(i=>Math.hypot(q[(i+1)%4][0]-q[i][0], q[(i+1)%4][1]-q[i][1]));
-    const ms=[0,1,2,3].map(i=>{ const v=S.qhist.map(q=>sides(q)[i]).sort((x,y)=>x-y); return v[Math.floor(v.length/2)]; });
-    const fs=sides(fr.quad), msz=(ms[0]+ms[1]+ms[2]+ms[3])/4;
-    const shapeDev=Math.max(...fs.map((L,i)=>Math.abs(L-ms[i])))/msz;
-    const posDev=Math.max(...fr.quad.map((p,c)=>Math.hypot(p[0]-med[c][0],p[1]-med[c][1])))/msz;
-    // and between consecutive accepted frames the cube only moves a little
-    const last=BURST.frames.length ? BURST.frames[BURST.frames.length-1].quad : null;
-    const jump= last ? Math.max(...fr.quad.map((p,c)=>Math.hypot(p[0]-last[c][0],p[1]-last[c][1])))/msz : 0;
-    consistent = shapeDev < 0.035 && posDev < 0.12 && jump < 0.1; S.qmed=med; S.qmedAge=0; }
-  else S.qmedAge=(S.qmedAge||0)+1;
+  if(S.lastGood){ const a=sides(S.lastGood), f2=sides(fr.quad), m=(a[0]+a[1]+a[2]+a[3])/4;
+    const shapeDev=Math.max(...f2.map((L,i)=>Math.abs(L-a[i])))/m;
+    const jump=Math.max(...fr.quad.map((p,c)=>Math.hypot(p[0]-S.lastGood[c][0],p[1]-S.lastGood[c][1])))/m;
+    consistent = shapeDev<0.04 && jump<0.12; }
   const good = fr.ok && consistent && motion<T.burstMaxMotion;
-  drawLock(reg, fr.quad, good ? '#86c39a' : '#e3a95d');
-  $('guide').className = good ? 'armed' : 'ready';
+  if(good){ S.lastGood=fr.quad.map(p=>p.slice()); S.lockStreak=(S.lockStreak||0)+1; S.lockMiss=0; S.dispQ = S.dispQ && S.lockStreak>1 ? S.dispQ.map((p,c)=>[p[0]*0.55+fr.quad[c][0]*0.45, p[1]*0.55+fr.quad[c][1]*0.45]) : fr.quad.map(p=>p.slice()); }
+  else { S.lockMiss=(S.lockMiss||0)+1; if(S.lockMiss>=4){ S.lockStreak=0; S.dispQ=null; S.lastGood=null; } }
+  if(S.dispQ && S.lockStreak>=2) drawLock(reg, S.dispQ, '#86c39a'); else clearLock();
+  $('guide').className = (S.lockStreak>=2) ? 'armed' : 'ready';
   if(good){
     BURST.maxSharp=Math.max(BURST.maxSharp,fr.sh); BURST.frames.push(fr);
     BURST.frames=BURST.frames.filter(x=>x.sh>=BURST.maxSharp*0.55).slice(-T.faceNeed);
   }
   const frac=BURST.frames.length/T.faceNeed; setFaceProgress(frac);
-  setStatus(good ? (frac<0.5?'已鎖定方塊，連拍中…':'很好，再一下…') : '對準中…', good ? '綠框貼著方塊邊緣就對了' : '讓方塊這一面大約填滿方框');
+  const small = S.dispQ && fr.size < reg.box.s*0.78;
+  setStatus(S.lockStreak>=2 ? (frac<0.5?'已鎖定方塊，連拍中…':'很好，再一下…') : '尋找方塊中…', small ? '方塊再靠近鏡頭一點，填滿四個角' : (S.lockStreak>=2 ? '綠框要貼著方塊這一面的邊緣' : '把方塊這一面放進四個角之間，正對鏡頭'));
   if(BURST.frames.length>=T.faceNeed){ const frs=BURST.frames.slice(); resetBurst(); captureBurst(frs); }
 }
 async function captureBurst(frames){ if(S.capturing) return; S.capturing=true; clearLock(); try{ await jFinishFrames(frames); } finally { S.capturing=false; } }
