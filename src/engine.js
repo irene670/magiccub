@@ -616,12 +616,12 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api; else 
       const c1 = cells54.map((p, fi) => { const g = fm[Math.floor(fi / 9)].map((x, c) => gm[c] / (x + 1e-6)); const d = new Float32Array(p.data.length); for (let i = 0; i < d.length; i++) d[i] = p.data[i] * g[i % 3]; return { S: p.S, data: d }; });
       const gains = seamGains(c1, r1.homeImgCap);
       const c2 = c1.map((p, fi) => { const g = gains[Math.floor(fi / 9)]; const d = new Float32Array(p.data.length); for (let i = 0; i < d.length; i++) d[i] = Math.min(1.5, p.data[i] / g); return { S: p.S, data: d }; });
-      const o2 = Object.assign({}, o1, { normalize: false, faceRot: r1.faceRot, rotSearch: [] });
+      const o2 = Object.assign({}, o1, { normalize: false, faceRot: r1.faceRot, rotSearch: [], rotGreedy: [] });
       const r2 = jigsaw(c2, o2);
       if (JSON.stringify(r2.det) === JSON.stringify(r1.det)) return r1;
       if (!r2.valid) return r1; if (!r1.valid) return r2;
       // keep pass 2 only if it wins under BOTH measures (before and after exposure correction)
-      const [a1, b1] = jigsaw(cells54, Object.assign({}, o1, { faceRot: r1.faceRot, rotSearch: [], evalOnly: [r1.det, r2.det] }));
+      const [a1, b1] = jigsaw(cells54, Object.assign({}, o1, { faceRot: r1.faceRot, rotSearch: [], rotGreedy: [], evalOnly: [r1.det, r2.det] }));
       const [a2, b2] = jigsaw(c2, Object.assign({}, o2, { evalOnly: [r1.det, r2.det] }));
       const pick = (b1 < a1 && b2 < a2) ? r2 : r1;
       pick.passScores = [a1, b1, a2, b2]; pick.gains = gains;
@@ -656,10 +656,20 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api; else 
     let Hn = Hbase, Vn = Vbase, MAP = null;
     // a face scanned rotated by k: standard id (slot,rot) -> captured id
     function mapFor(fr) { const M = new Int32Array(NI); for (let f = 0; f < 6; f++) for (let p = 0; p < 9; p++) for (let r = 0; r < 4; r++) { const k = fr[f]; M[(f * 9 + p) * 4 + r] = (f * 9 + E.capPos(p, k)) * 4 + ((r - k + 8) % 4); } return M; }
+    // locked home facelets (user said "this face is right"): opts.lockCap = {homeFacelet: capturedImageId}
+    const LS = new Int16Array(54).fill(-1), LI = new Int16Array(NI).fill(-1); const LOCKCAP = opts.lockCap || null;
+    function buildLocks() {
+      LS.fill(-1); LI.fill(-1); if (!LOCKCAP) return;
+      const INV = new Int32Array(NI); for (let a = 0; a < NI; a++) INV[MAP ? MAP[a] : a] = a;
+      for (const h in LOCKCAP) { const std = INV[LOCKCAP[h]]; LS[+h] = std; LI[std] = +h; }
+    }
+    const okEnt = ent => { if (!LOCKCAP) return true; for (let i = 0; i < ent.length; i++) { const h = ent[i][0], id = ent[i][1]; if (LS[h] >= 0 && LS[h] !== id) return false; if (LI[id] >= 0 && LI[id] !== h) return false; } return true; };
+    const detOk = det => { if (!LOCKCAP) return true; const img = homeImages(det); for (let h = 0; h < 54; h++) if (LS[h] >= 0 && img[h] !== LS[h]) return false; return true; };
     function setTables(fr) {
-      if (fr.every(x => x === 0)) { Hn = Hbase; Vn = Vbase; MAP = null; return; }
+      if (fr.every(x => x === 0)) { Hn = Hbase; Vn = Vbase; MAP = null; buildLocks(); return; }
       const M = mapFor(fr); MAP = M; Hn = new Float64Array(NI * NI); Vn = new Float64Array(NI * NI);
       for (let a = 0; a < NI; a++) { const ma = M[a] * NI; for (let b = 0; b < NI; b++) { Hn[a * NI + b] = Hbase[ma + M[b]]; Vn[a * NI + b] = Vbase[ma + M[b]]; } }
+      buildLocks();
     }
     const costH = (a, b) => Hn[a * NI + b], costV = (a, b) => Vn[a * NI + b];
     const scale = 1;
@@ -696,16 +706,16 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api; else 
     }
     function optEdges(det, img, useCorners) {
       const C = [], T = [];
-      for (let s = 0; s < 12; s++) { C.push([]); T.push([]); for (let e = 0; e < 12; e++) { let b = 1e18, bt = 0; for (let t = 0; t < 2; t++) { const v = localCost(img, EENT[s][e][t], useCorners ? ['e'] : ['e', 'k']); if (v < b) { b = v; bt = t; } } C[s].push(b); T[s].push(bt); } }
+      for (let s = 0; s < 12; s++) { C.push([]); T.push([]); for (let e = 0; e < 12; e++) { let b = 1e18, bt = 0; for (let t = 0; t < 2; t++) { if (!okEnt(EENT[s][e][t])) continue; const v = localCost(img, EENT[s][e][t], useCorners ? ['e'] : ['e', 'k']); if (v < b) { b = v; bt = t; } } C[s].push(Math.min(b, 1e9)); T[s].push(bt); } }
       const h = hungarian(C); det.edges = h.assign.map((e, s) => [e, T[s][e]]);
     }
     function optCorners(det, img) {
       const C = [], T = [];
-      for (let s = 0; s < 8; s++) { C.push([]); T.push([]); for (let c = 0; c < 8; c++) { let b = 1e18, bt = 0; for (let t = 0; t < 3; t++) { const v = localCost(img, CENT[s][c][t], ['k', 'c']); if (v < b) { b = v; bt = t; } } C[s].push(b); T[s].push(bt); } }
+      for (let s = 0; s < 8; s++) { C.push([]); T.push([]); for (let c = 0; c < 8; c++) { let b = 1e18, bt = 0; for (let t = 0; t < 3; t++) { if (!okEnt(CENT[s][c][t])) continue; const v = localCost(img, CENT[s][c][t], ['k', 'c']); if (v < b) { b = v; bt = t; } } C[s].push(Math.min(b, 1e9)); T[s].push(bt); } }
       const h = hungarian(C); det.corners = h.assign.map((c, s) => [c, T[s][c]]);
     }
     function optCentres(det, img) {
-      for (let f = 0; f < 6; f++) { if (FQ && FQ[f] != null) { det.cq[f] = FQ[f]; continue; } let b = 1e18, bq = 0; for (let q = 0; q < 4; q++) { const v = localCost(img, [[f * 9 + 4, (f * 9 + 4) * 4 + ((4 - q) % 4)]], ['k']); if (v < b) { b = v; bq = q; } } det.cq[f] = bq; }
+      for (let f = 0; f < 6; f++) { if (FQ && FQ[f] != null) { det.cq[f] = FQ[f]; continue; } let b = 1e18, bq = 0; for (let q = 0; q < 4; q++) { if (!okEnt([[f * 9 + 4, (f * 9 + 4) * 4 + ((4 - q) % 4)]])) continue; const v = localCost(img, [[f * 9 + 4, (f * 9 + 4) * 4 + ((4 - q) % 4)]], ['k']); if (v < b) { b = v; bq = q; } } det.cq[f] = bq; }
     }
     function partialImg(det, parts) {
       const img = new Array(54);
@@ -829,6 +839,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api; else 
             const o = O[oi];
             if (sl.type === 'e' && (b.usedE >> o.ps) & 1) continue;
             if (sl.type === 'c' && (b.usedC >> o.ps) & 1) continue;
+            if (LOCKCAP && !okEnt(o.ent)) continue;
             let add = 0; const ent = o.ent;
             for (let i = 0; i < ent.length; i++) { const hf = ent[i][0], id = ent[i][1], nb = NB[hf];
               for (let j = 0; j < nb.length; j++) { const oid = img[nb[j][0]]; if (oid < 0) continue; add += nb[j][1] ? (nb[j][2] ? Hn[id * NI + oid] : Vn[id * NI + oid]) : (nb[j][2] ? Hn[oid * NI + id] : Vn[oid * NI + id]); } }
@@ -889,10 +900,37 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api; else 
       bestR = best2;
       faceRot = bestR.fr; if (opts.debug) console.log('  [rot]', hyp.sort((a, b) => a[0] - b[0]).slice(0, 4).map(h => h[1] + ':' + h[0].toFixed(1)).join(' '));
     }
+    if (opts.rotGreedy && opts.rotGreedy.length) {
+      const quick = fr => { setTables(fr); const br = beamSearch(opts.rotBeam || 300, opts.rotStart || 0); if (!br.length) return 1e18; return Math.min(...br.slice(0, 2).map(r => { const d = clone(r.det); const v = descend(d); return detOk(d) ? v : v + 1e6; })); };
+      // with locked faces: only rotations under which every locked piece can actually be placed
+      const feasible = fr => {
+        setTables(fr); if (!LOCKCAP) return true;
+        for (let K = 0; K < 8; K++) { const fac = E.CORNERS[K].fac; if (!fac.some(h => LS[h] >= 0)) continue; let ok = false; for (let s2 = 0; s2 < 8 && !ok; s2++) for (let t = 0; t < 3 && !ok; t++) if (okEnt(CENT[s2][K][t])) ok = true; if (!ok) return false; }
+        for (let K = 0; K < 12; K++) { const fac = E.EDGES[K].fac; if (!fac.some(h => LS[h] >= 0)) continue; let ok = false; for (let s2 = 0; s2 < 12 && !ok; s2++) for (let t = 0; t < 2 && !ok; t++) if (okEnt(EENT[s2][K][t])) ok = true; if (!ok) return false; }
+        return true;
+      };
+      const faces = opts.rotGreedy;
+      if (LOCKCAP) {
+        const cands = []; const n = Math.pow(4, faces.length);
+        for (let code = 0; code < n; code++) { const fr = faceRot.slice(); faces.forEach((f, i) => fr[f] = (code >> (2 * i)) & 3); if (feasible(fr)) cands.push(fr); }
+        let best = null; for (const fr of cands.slice(0, 24)) { const v = quick(fr); if (!best || v < best.v) best = { v, fr }; }
+        if (best) faceRot = best.fr;
+        if (opts.debug) console.log('  [rotLocked] feasible', cands.length, 'chosen', faceRot.join(''));
+      } else {
+        let cur = quick(faceRot);
+        for (let round = 0; round < (opts.rotRounds || 3); round++) for (const f of faces) {
+          let bk = faceRot[f];
+          for (let k = 0; k < 4; k++) { if (k === faceRot[f]) continue; const fr = faceRot.slice(); fr[f] = k; const v = quick(fr); if (v < cur - 1e-9) { cur = v; bk = k; } }
+          faceRot[f] = bk;
+        }
+        if (opts.debug) console.log('  [rotGreedy]', faceRot.join(''), cur.toFixed(2));
+      }
+    }
     setTables(faceRot);
     if (opts.evalOnly) return opts.evalOnly.map(d => score(homeImages(d)));
     let beamRes = [];
     for (const st of (opts.starts || [0, 2, 3, 5])) beamRes = beamRes.concat(beamSearch(opts.beam || 1200, st));
+    if (!beamRes.length) beamRes = [{ det: { cq: [0, 0, 0, 0, 0, 0], corners: [0, 1, 2, 3, 4, 5, 6, 7].map(i => [i, 0]), edges: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map(i => [i, 0]) }, score: 1e9 }];
     beamRes.sort((a, b) => a.score - b.score);
     const seeds = beamRes.slice(0, opts.beamKeep || 16).map(r => ({ det: r.det, score: descend(r.det) }))
       .sort((a, b) => a.score - b.score);
@@ -911,14 +949,14 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api; else 
         else { const a = ri(8), b = ri(8); const t = d.corners[a]; d.corners[a] = [d.corners[b][0], ri(3)]; d.corners[b] = [t[0], ri(3)]; }
         // after a centre change, edges are re-fit first from centres + corners
         const sc = descend(d);
-        if (sc < curS - 1e-9) { cur = d; curS = sc; }
+        if (sc < curS - 1e-9 && detOk(d)) { cur = d; curS = sc; }
       }
       if (opts.debug) console.log("  [ils] seed", r, "iters", it, "score", curS.toFixed(2)); results.push({ det: cur, score: curS });
     }
     results.sort((a, b) => a.score - b.score);
     // final: best LEGAL candidate among (a) legal beam solutions, (b) descended / ILS results (repaired if needed)
     let chosen = null;
-    const consider = c => { if (c && (!chosen || c.score < chosen.score - 1e-9)) chosen = c; };
+    const consider = c => { if (c && detOk(c.det) && (!chosen || c.score < chosen.score - 1e-9)) chosen = c; };
     let nLegal = 0;
     for (const r of beamRes) { if (nLegal >= 40) break; if (checkState(buildState(r.det)).ok) { nLegal++; const d = clone(r.det); const sc = score(homeImages(d)); consider({ det: d, score: sc }); } }
     const pool = results.concat(seeds).sort((a, b) => a.score - b.score).slice(0, 6);
@@ -957,7 +995,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api; else 
       const sc = d => score(homeImages(d));
       const singles = cand.map(c => { const d = JSON.parse(JSON.stringify(base)); applyC(d, c); return [sc(d), c]; }).sort((a, b) => a[0] - b[0]);
       let best = null;
-      const consider = list => { const d = JSON.parse(JSON.stringify(base)); for (const c of list) applyC(d, c); if (checkState(buildState(d)).ok) { const v = sc(d); if (!best || v < best.score) best = { det: d, score: v }; } };
+      const consider = list => { const d = JSON.parse(JSON.stringify(base)); for (const c of list) applyC(d, c); if (checkState(buildState(d)).ok && detOk(d)) { const v = sc(d); if (!best || v < best.score) best = { det: d, score: v }; } };
       const top = singles.slice(0, 60);
       for (let i = 0; i < top.length; i++) { consider([top[i][1]]); for (let j = i + 1; j < top.length; j++) consider([top[i][1], top[j][1]]); }
       if (!best) { const t2 = singles.slice(0, 18); for (let i = 0; i < t2.length; i++) for (let j = i + 1; j < t2.length; j++) for (let l = j + 1; l < t2.length; l++) consider([t2[i][1], t2[j][1], t2[l][1]]); }
