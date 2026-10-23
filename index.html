@@ -135,7 +135,11 @@ header h1 small{font-family:var(--f-body);font-weight:500;font-size:12px;color:v
 body.scanning #stage{transition:height .3s}
 body.scanning.turning #stage{height:min(40dvh,330px)}
 body.turning #stageHint,body.scanning #stageHint{display:none}
-body.solving #stage{height:min(30dvh,250px)}
+body.solving #stage{height:min(41dvh,360px)}
+body.solving #solve>*{flex:none}
+body.solving .moves{min-height:40px}
+#btnHomeView{position:absolute;right:10px;bottom:10px;z-index:2}
+#viewTag{position:absolute;left:10px;top:10px;z-index:2;font-size:12px;font-weight:700;background:var(--gold);color:var(--gold-ink);border-radius:99px;padding:3px 10px}
 body.solving .chips{display:none}
 body.solving #solve{overflow-y:auto;overscroll-behavior:contain;padding-bottom:4px}
 body.solving .hold{padding:6px 10px;font-size:12px}
@@ -179,7 +183,9 @@ body.scanning .remain{min-height:0;font-size:12px;line-height:1.35}
 .movecard .viz canvas{width:76px;height:76px;border-radius:12px;border:2px solid var(--gold);display:block}
 .movecard .viz svg{position:absolute;inset:-8px;width:92px;height:92px;pointer-events:none;color:var(--gold);filter:drop-shadow(0 1px 2px #000)}
 .movecard .viz .tag{position:absolute;right:-6px;bottom:-6px;font-family:var(--f-mono);font-weight:700;font-size:13px;background:var(--gold);color:var(--gold-ink);border-radius:8px;padding:1px 6px}
-.movecard .desc b{font-size:18px;display:block;margin-bottom:2px}
+.movecard{padding:10px 12px}
+.movecard .desc b{font-size:20px;display:block;margin-bottom:2px}
+.movecard .desc .dirIco{display:inline-block;width:22px;height:22px;vertical-align:-4px;margin-right:6px;color:var(--gold)}
 .movecard .split{display:inline-block;margin-top:4px;font-size:12px;font-weight:700;color:var(--gold-ink);background:var(--gold);border-radius:99px;padding:1px 8px}
 
 #burst{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);display:flex;gap:5px;pointer-events:none}
@@ -200,6 +206,8 @@ body.scanning .remain{min-height:0;font-size:12px;line-height:1.35}
     <div id="demoBanner" hidden>尚未校正：目前用示範圖案。點這裡開始校正 →</div>
     <div id="stageBadge">0 / 6</div>
     <div id="stageHint">拖曳可旋轉方塊</div>
+    <div id="viewTag" hidden></div>
+    <button class="pill" id="btnHomeView" hidden style="background:rgba(17,20,28,.7);color:var(--paper)">回正</button>
     <div id="turnHint" hidden role="status" aria-live="polite"><div class="ico" id="turnIco"></div><div class="tx"><span class="stepTag" id="turnStep"></span><span class="main" id="turnText"></span><span class="seg" id="turnSeg"></span></div></div>
     <div id="holdTag" hidden></div>
   </div>
@@ -255,7 +263,7 @@ body.scanning .remain{min-height:0;font-size:12px;line-height:1.35}
     <!-- solve -->
     <div id="solve" hidden>
       <div class="hold" id="hold"></div>
-      <div class="movecard"><div class="viz" id="mvViz"></div><div class="desc" id="mvDesc"></div></div>
+      <div class="movecard"><div class="desc" id="mvDesc"></div></div>
       <div class="moves" id="moves"></div>
       <div class="row">
         <button class="btn" id="btnPrev">◀ 上一步</button>
@@ -3109,13 +3117,41 @@ function initThree(){
   }
   // drag to rotate
   let drag=null;
-  st.addEventListener('pointerdown',e=>{ drag={x:e.clientX,y:e.clientY}; st.setPointerCapture(e.pointerId); });
-  st.addEventListener('pointermove',e=>{ if(!drag) return; const dx=e.clientX-drag.x, dy=e.clientY-drag.y; drag={x:e.clientX,y:e.clientY};
-    const q=new THREE.Quaternion().setFromEuler(new THREE.Euler(dy*0.01,dx*0.01,0,'XYZ')); root.quaternion.premultiply(q); });
+  // turntable: left/right turns around the vertical axis, up/down only tilts (clamped) - the cube never tumbles
+  st.addEventListener('pointerdown',e=>{ if(!R3.view) return; drag={x:e.clientX,y:e.clientY}; st.setPointerCapture(e.pointerId); });
+  st.addEventListener('pointermove',e=>{ if(!drag||!R3.view) return; const dx=e.clientX-drag.x, dy=e.clientY-drag.y; drag={x:e.clientX,y:e.clientY};
+    R3.view.yaw+=dx*0.012; R3.view.pitch=Math.max(-1.1,Math.min(1.1,R3.view.pitch+dy*0.012)); R3.viewAnim=null; applyView(); });
   const end=()=>drag=null; st.addEventListener('pointerup',end); st.addEventListener('pointercancel',end);
   const resize=()=>{ const w=st.clientWidth,h=st.clientHeight; renderer.setSize(w,h,false); camera.aspect=w/h; camera.updateProjectionMatrix(); };
   new ResizeObserver(resize).observe(st); resize();
   const loop=()=>{ renderer.render(scene,camera); requestAnimationFrame(loop); }; loop();
+}
+// view = {pitch, yaw}; only used where the user may look around (preview / solve)
+function viewQ(v){ return new THREE.Quaternion().setFromEuler(new THREE.Euler(v.pitch, v.yaw, 0, 'XYZ')); }
+function applyView(){ if(R3.view) R3.root.quaternion.copy(viewQ(R3.view)); }
+function animateView(v, ms){
+  const from=R3.root.quaternion.clone(), to=viewQ(v); R3.view={pitch:v.pitch, yaw:v.yaw}; const t0=performance.now(), tok={}; R3.viewAnim=tok;
+  const tick=()=>{ if(R3.viewAnim!==tok) return; const t=Math.min(1,(performance.now()-t0)/ms); const e=1-Math.pow(1-t,3); R3.root.quaternion.copy(from).slerp(to,e); if(t<1) requestAnimationFrame(tick); }; tick();
+}
+const HOME_VIEW={pitch:0.42, yaw:-0.55};
+// where to look from so the face that turns is visible (label tells the user)
+const FACE_VIEW={ F:{pitch:0.42,yaw:-0.55,label:''}, R:{pitch:0.42,yaw:-0.75,label:''}, U:{pitch:0.62,yaw:-0.55,label:''},
+  L:{pitch:0.42,yaw:0.6,label:'目前從左邊看'}, B:{pitch:0.42,yaw:2.55,label:'目前從後面看'}, D:{pitch:-0.62,yaw:-0.55,label:'目前從下面看'} };
+// curved arrow drawn just outside the face that turns
+function showMoveArrow(face, k){
+  if(R3.arrow){ R3.root.remove(R3.arrow); R3.arrow.traverse(o=>{ if(o.geometry) o.geometry.dispose(); }); R3.arrow=null; }
+  if(!face) return;
+  const n=new THREE.Vector3(...E.NRM[face]), r=new THREE.Vector3(...E.RGT[face]), u=new THREE.Vector3(...E.UPV[face]);
+  const c=n.clone().multiplyScalar(1.62), R=1.08, cw = ((k%4)+4)%4===1;
+  const a0=cw? 2.2 : -0.6, a1=cw? -0.6 : 2.2; const pts=[];
+  for(let i=0;i<=40;i++){ const a=a0+(a1-a0)*i/40; pts.push(c.clone().add(r.clone().multiplyScalar(Math.cos(a)*R)).add(u.clone().multiplyScalar(Math.sin(a)*R))); }
+  const mat=new THREE.MeshBasicMaterial({color:0xf2c14e, depthTest:false, transparent:true, opacity:0.95});
+  const g=new THREE.Group();
+  const tube=new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts),40,0.07,8,false),mat); tube.renderOrder=10; g.add(tube);
+  const end=pts[pts.length-1], dir=end.clone().sub(pts[pts.length-3]).normalize();
+  const cone=new THREE.Mesh(new THREE.ConeGeometry(0.2,0.42,16),mat); cone.renderOrder=10;
+  cone.position.copy(end.clone().add(dir.clone().multiplyScalar(0.12))); cone.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),dir); g.add(cone);
+  R3.root.add(g); R3.arrow=g;
 }
 function texOf(canvas, q){ const t=new THREE.CanvasTexture(canvas); if(q){ t.center.set(0.5,0.5); t.rotation=-q*Math.PI/2; } return t; }
 function resetCubies(){ for(const k in R3.cubies){ const g=R3.cubies[k]; const p=k.split(',').map(Number); g.position.set(p[0],p[1],p[2]); g.quaternion.identity(); } }
@@ -3390,13 +3426,11 @@ function enterSolve(){
   expandQuarter(S.solution);
   S.mode='solve'; stopCamera(); setHoldTag(null); TURN_TOKEN++;
   $('scanArea').hidden=true; $('scanArea').style.display='none'; $('solve').hidden=false; $('st1').className=''; $('st2').className='on';
-  $('stageHint').textContent='上方是你手上方塊的樣子，可拖曳旋轉對照'; $('demoBanner').hidden=true;
-  showStateCube(S.curState); R3.root.quaternion.setFromEuler(new THREE.Euler(0.5,-0.62,0,'XYZ'));
-  const nm=names(); const hold=$('hold'); hold.innerHTML='';
-  const mk=f=>{ const c=canvasOf(68,68); c.getContext('2d').drawImage(S.refCells[F.indexOf(f)*9+4],0,0,68,68); return c; };
-  hold.appendChild(mk('F')); hold.appendChild(mk('U'));
-  const t=document.createElement('div'); t.innerHTML=''; const b=document.createElement('b'); b.textContent='拿法：'; t.appendChild(b);
-  t.appendChild(document.createTextNode('中間格是第一張圖的面（'+nm.F+'）朝向你，第二張圖的面（'+nm.U+'）朝上，整個過程不要換方向。'));
+  $('stageHint').textContent=''; $('demoBanner').hidden=true;
+  showStateCube(S.curState); R3.view={...HOME_VIEW}; applyView(); $('btnHomeView').hidden=false;
+  const hold=$('hold'); hold.innerHTML='';
+  const t=document.createElement('div'); const b=document.createElement('b'); b.textContent='拿法：'; t.appendChild(b);
+  t.appendChild(document.createTextNode('跟掃描第 1 面時一樣，正面朝自己、頂部朝上，全程不要換方向。'));
   hold.appendChild(t);
   const sol=S.solution;
   $('solveNote').className='note '+(sol.verified?'ok':'bad');
@@ -3405,20 +3439,21 @@ function enterSolve(){
 }
 function moveText(st){
   const nm=names(), f=st.f, k=((st.k%4)+4)%4;
-  return { main:'轉「'+FACE_CN[f]+'」面 '+(k===1?'順時針':'逆時針')+' 90°', who:'中間是這張圖的那一面（'+nm[f]+'）', sub:'面向那一面看，只轉最外面那一層。', split: st.part ? '180° 分兩次：第 '+st.part+' / 2 次' : '' };
+  return { main:'轉「'+FACE_CN[f]+'」面 · '+(k===1?'順時針':'逆時針')+' 90°', sub:'看著那一面時的方向，照 3D 上的金色箭頭轉最外面那一層。', split: st.part ? '180° 分兩次：第 '+st.part+' / 2 次' : '' };
 }
 function renderMoves(){
   const el=$('moves'); el.innerHTML='';
   S.solution.steps.forEach((st,i)=>{ const sp=document.createElement('span'); sp.textContent=E.fmtMove(st.f,st.k)+(st.part?'·'+st.part:''); sp.className=i<S.step?'done':i===S.step?'cur':''; sp.onclick=()=>jumpTo(i); el.appendChild(sp); });
   const cur=el.children[S.step]; if(cur) cur.scrollIntoView({block:'nearest',inline:'center',behavior:'smooth'});
-  const st=S.solution.steps[S.step], viz=$('mvViz'), d=$('mvDesc'); viz.innerHTML=''; d.innerHTML='';
+  const st=S.solution.steps[S.step], d=$('mvDesc'); d.innerHTML='';
   if(st){
-    const t=moveText(st); const c=canvasOf(152,152); c.getContext('2d').drawImage(S.refCells[F.indexOf(st.f)*9+4],0,0,152,152); viz.appendChild(c);
-    viz.insertAdjacentHTML('beforeend', ICONS[st.k===1?'cw':'ccw']+'<span class="tag">'+E.fmtMove(st.f,st.k)+'</span>');
-    const b=document.createElement('b'); b.textContent=t.main; d.appendChild(b); d.append(t.who);
+    const t=moveText(st);
+    const b=document.createElement('b'); b.insertAdjacentHTML('beforeend','<span class="dirIco">'+ICONS[st.k===1?'cw':'ccw']+'</span>'); b.append(t.main); d.appendChild(b);
     const sm=document.createElement('small'); sm.textContent='第 '+(S.step+1)+' / '+S.solution.steps.length+' 步　'+t.sub; d.appendChild(sm);
     if(t.split){ const sp=document.createElement('span'); sp.className='split'; sp.textContent=t.split; d.appendChild(sp); }
-  } else { viz.innerHTML='<div style="width:76px;height:76px;border-radius:12px;background:var(--ok);display:grid;place-items:center;font-size:40px;color:#10301a">✓</div>'; const b=document.createElement('b'); b.textContent='完成！方塊已解鎖還原'; d.appendChild(b); }
+    const fv=FACE_VIEW[st.f]; animateView(fv, 450); $('viewTag').hidden=!fv.label; $('viewTag').textContent=fv.label;
+    showMoveArrow(st.f, st.k);
+  } else { showMoveArrow(null); animateView(HOME_VIEW, 450); $('viewTag').hidden=true; const b=document.createElement('b'); b.textContent='✓ 完成！方塊已解鎖還原'; b.style.color='var(--ok)'; d.appendChild(b); }
   $('stageBadge').textContent = S.step+' / '+S.solution.steps.length;
   updateUndoSolve();
 }
@@ -3431,12 +3466,13 @@ function flashLayer(state, face, ms){
   });
 }
 function updateUndoSolve(){ $('btnPrev').disabled=S.step===0||S.animating; $('btnStep').disabled=S.step>=S.solution.moves.length||S.animating; }
-async function stepFwd(){ if(S.animating||S.step>=S.solution.moves.length) return false; S.animating=true; updateUndoSolve(); const [f,k]=S.solution.moves[S.step]; await flashLayer(S.curState,f,260); await animateMove(S.curState,f,k,620); S.step++; S.animating=false; renderMoves(); if(S.step===S.solution.moves.length){ vibrate([60,60,120]); toast('解鎖完成！'); } return true; }
-async function stepBack(){ if(S.animating||S.step===0) return; S.animating=true; updateUndoSolve(); S.step--; const [f,k]=S.solution.moves[S.step]; await animateMove(S.curState,f,(4-k)%4,420); S.animating=false; renderMoves(); }
+async function stepFwd(){ if(S.animating||S.step>=S.solution.moves.length) return false; S.animating=true; updateUndoSolve(); const [f,k]=S.solution.moves[S.step]; await flashLayer(S.curState,f,260); showMoveArrow(null); await animateMove(S.curState,f,k,620); S.step++; S.animating=false; renderMoves(); if(S.step===S.solution.moves.length){ vibrate([60,60,120]); toast('解鎖完成！'); } return true; }
+async function stepBack(){ if(S.animating||S.step===0) return; S.animating=true; updateUndoSolve(); S.step--; showMoveArrow(null); const [f,k]=S.solution.moves[S.step]; await animateMove(S.curState,f,(4-k)%4,420); S.animating=false; renderMoves(); }
 async function jumpTo(i){ if(S.animating) return; S.playing=false; $('btnPlay').textContent='▶ 自動播放'; S.curState=E.applyAlg(E.cloneState(S.startState), S.solution.moves.slice(0,i)); S.step=i; placeCubies(S.curState); renderMoves(); }
 $('btnStep').onclick=stepFwd; $('btnPrev').onclick=stepBack;
 $('btnPlay').onclick=async()=>{ if(S.playing){ S.playing=false; $('btnPlay').textContent='▶ 自動播放'; return; } S.playing=true; $('btnPlay').textContent='❚❚ 暫停'; while(S.playing && await stepFwd()) await sleep(700); S.playing=false; $('btnPlay').textContent='▶ 自動播放'; };
 $('btnRestart').onclick=()=>jumpTo(0);
+$('btnHomeView').onclick=()=>{ const st=S.solution&&S.solution.steps[S.step]; animateView(st?FACE_VIEW[st.f]:HOME_VIEW, 400); };
 $('btnRescan').onclick=()=>backToScan();
 
 // ---------------- calibration ----------------
@@ -3861,7 +3897,7 @@ function showPreview(){
   $('pvNote').className='note '+(res.valid?'':'bad');
   $('pvNote').textContent = res.valid ? ('程式拼出來的 6 張圖如下'+rotNote+'。圖案看起來對，就按「正確，開始解鎖」；上方 3D 也可以轉來看。') : '拼不出合理的結果。請檢查每一面的格線有沒有對準（點掃描頁的小圖可微調），或重拍。';
   $('btnPvOk').disabled = !res.valid || !res.sol;
-  showStateCube(E.solvedState()); $('stageHint').textContent='這是還原後的樣子'; $('stageBadge').textContent='預覽';
+  showStateCube(E.solvedState()); R3.view={...HOME_VIEW}; applyView(); $('btnHomeView').hidden=false; $('stageHint').textContent='這是還原後的樣子（左右拖可轉）'; $('stageBadge').textContent='預覽';
 }
 $('btnPvOk').onclick=()=>{
   const res=S.jres; S.solution={ moves:res.sol.moves, verified:res.sol.verified, base:res.sol.base, fix:res.sol.fix };
@@ -3898,6 +3934,7 @@ $('btnDump').onclick=()=>{
   c.toBlob(b=>{ const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download='cube-scan-'+Date.now()+'.png'; document.body.appendChild(a); a.click(); a.remove(); toast('已下載，可以傳給客服'); },'image/png');
 };
 function backToScan(){
+  R3.view=null; R3.viewAnim=null; showMoveArrow(null); $('viewTag').hidden=true; $('btnHomeView').hidden=true;
   S.playing=false; S.mode='scan'; $('solve').hidden=true; $('preview').hidden=true; $('preview').style.display='none'; $('scanArea').hidden=false; $('scanArea').style.display='flex'; $('st1').className='on'; $('st2').className=''; $('stageHint').textContent='拖曳可旋轉方塊';
   $('demoBanner').hidden=!(S.method==='library'&&S.calib&&S.calib.demo);
   requestAnimationFrame(()=>{ layoutGuide(); showScanCube(); updateProgress(); renderChips(); renderRemain(); if(S.method==='jigsaw'){ if(jNext()) jReady(); else { setJState('done'); setStatus('6 面完成','按「下一步：拼圖解鎖」'); } } startCamera(); });
