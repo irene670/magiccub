@@ -917,7 +917,9 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api; else 
       // re-check the 3 best hypotheses more thoroughly
       hyp.sort((a, b) => a[0] - b[0]); let best2 = null;
       if (!hyp.length) hyp.push([0, faceRot.join('')]);
-      for (const [, key] of hyp.slice(0, 3)) {
+      const recheck = hyp.slice(0, 3).map(h => h[1]);
+      if (opts.rotPrefer) { const pref = hyp.filter(h => h[1].split('').every((c, i) => !opts.rotPrefer.includes(i) || c === '0')); if (pref.length && !recheck.includes(pref[0][1])) recheck.push(pref[0][1]); }
+      for (const key of recheck) {
         const fr = key.split('').map(Number); setTables(fr);
         let br = []; for (const st of [0, 3]) br = br.concat(beamSearch(700, st));
         br.sort((a, b) => a.score - b.score);
@@ -1283,5 +1285,53 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api; else 
     for (let i = 0; i < size * size * 4; i += 4) { for (let ch = 0; ch < 3; ch++) { for (let j = 0; j < n; j++) v[j] = faces[j][i + ch]; v.sort((a, b) => a - b); out[i + ch] = n % 2 ? v[(n - 1) / 2] : (v[n / 2 - 1] + v[n / 2]) / 2; } out[i + 3] = 255; }
     return out;
   }
+  // fine alignment: measure where the dark gaps between stickers really are, then fit the 4 corners to them
+  function refineQuad(rgba, W, H, quad, opts) {
+    opts = opts || {};
+    const L = new Float32Array(W * H); for (let i = 0, j = 0; j < W * H; i += 4, j++) L[j] = 0.299 * rgba[i] + 0.587 * rgba[i + 1] + 0.114 * rgba[i + 2];
+    const at = (x, y) => { if (x < 0 || y < 0 || x >= W - 1 || y >= H - 1) return NaN; const ix = x | 0, iy = y | 0, fx = x - ix, fy = y - iy, i = iy * W + ix; return (L[i] * (1 - fx) + L[i + 1] * fx) * (1 - fy) + (L[i + W] * (1 - fx) + L[i + W + 1] * fx) * fy; };
+    const map = q => { const [x0, y0] = q[0], [x1, y1] = q[1], [x2, y2] = q[2], [x3, y3] = q[3];
+      const dx1 = x1 - x2, dx2 = x3 - x2, dx3 = x0 - x1 + x2 - x3, dy1 = y1 - y2, dy2 = y3 - y2, dy3 = y0 - y1 + y2 - y3; let a, b, c, d, e, f, g, h;
+      if (Math.abs(dx3) < 1e-9 && Math.abs(dy3) < 1e-9) { a = x1 - x0; b = x2 - x1; c = x0; d = y1 - y0; e = y2 - y1; f = y0; g = 0; h = 0; }
+      else { const den = dx1 * dy2 - dx2 * dy1; g = (dx3 * dy2 - dx2 * dy3) / den; h = (dx1 * dy3 - dx3 * dy1) / den; a = x1 - x0 + g * x1; b = x3 - x0 + h * x3; c = x0; d = y1 - y0 + g * y1; e = y3 - y0 + h * y3; f = y0; }
+      return (u, v) => { const w = g * u + h * v + 1; return [(a * u + b * v + c) / w, (d * u + e * v + f) / w]; }; };
+    const side = Math.hypot(quad[1][0] - quad[0][0], quad[1][1] - quad[0][1]);
+    const R = opts.search || 0.07, NO = 43, SEG = [[0.04, 0.33], [0.36, 0.64], [0.67, 0.96]];
+    const lim = side * (opts.range || 0.08);
+    let q = quad.map(p => p.slice()); let nMeas = 0;
+    for (let iter = 0; iter < (opts.iters || 4); iter++) {
+      const M = map(q), meas = [];
+      for (const t of [1 / 3, 2 / 3]) for (const vert of [true, false]) for (const [w0, w1] of SEG) {
+        const prof = new Float64Array(NO); let bad = false;
+        for (let k = 0; k < NO; k++) { const o = -R + 2 * R * k / (NO - 1); let sm = 0, n = 0;
+          for (let j = 0; j < 12; j++) { const w = w0 + (w1 - w0) * (j + 0.5) / 12; const [x, y] = vert ? M(t + o, w) : M(w, t + o); const v = at(x, y); if (!isNaN(v)) { sm += v; n++; } }
+          if (!n) { bad = true; break; } prof[k] = sm / n; }
+        if (bad) continue;
+        // darkest valley, then its dark-weighted centre (robust to a flat-bottomed gap)
+        let km = 0; for (let k = 1; k < NO; k++) if (prof[k] < prof[km]) km = k;
+        const sorted = Array.from(prof).sort((a, b) => a - b), bright = sorted[Math.floor(NO * 0.75)], depth = bright - prof[km];
+        if (depth < (opts.minDepth || 18)) continue;
+        const thr = prof[km] + depth * 0.5; let a = km, b = km; while (a > 0 && prof[a - 1] < thr) a--; while (b < NO - 1 && prof[b + 1] < thr) b++;
+        if (a === 0 || b === NO - 1) continue; // valley runs off the search window: not a clean gap
+        let sw = 0, so = 0; for (let k = a; k <= b; k++) { const wt = thr - prof[k] + 1e-3; sw += wt; so += wt * (-R + 2 * R * k / (NO - 1)); }
+        const o = so / sw, wm = (w0 + w1) / 2;
+        meas.push({ t, vert, wm, P: vert ? M(t + o, wm) : M(wm, t + o), wt: depth });
+      }
+      nMeas = meas.length; if (meas.length < 6) break;
+      const cost = qq => { const MM = map(qq); let s = 0; for (const m of meas) { const [x, y] = m.vert ? MM(m.t, m.wm) : MM(m.wm, m.t); s += m.wt * ((x - m.P[0]) ** 2 + (y - m.P[1]) ** 2); } return s; };
+      let best = cost(q);
+      for (const step of [side * 0.01, side * 0.004, side * 0.0015, side * 0.0005]) {
+        let improved = true, it = 0;
+        while (improved && it++ < 20) { improved = false;
+          for (let c = 0; c < 4; c++) for (let ax = 0; ax < 2; ax++) for (const sg of [-1, 1]) {
+            const t2 = q.map(p => p.slice()); t2[c][ax] += sg * step; if (Math.abs(t2[c][ax] - quad[c][ax]) > lim) continue;
+            const v = cost(t2); if (v < best - 1e-9) { best = v; q = t2; improved = true; } }
+        }
+      }
+    }
+    const moved = q.reduce((a, p, i) => a + Math.hypot(p[0] - quad[i][0], p[1] - quad[i][1]), 0) / 4 / side;
+    return { quad: q, n: nMeas, moved };
+  }
+  E.refineQuad = refineQuad;
   E.lockQuad = lockQuad; E.warpQuad = warpQuad; E.medianStack = medianStack; E.gradients = gradients;
 })();

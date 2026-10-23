@@ -306,7 +306,7 @@ body.scanning .remain{min-height:0;font-size:12px;line-height:1.35}
     <div id="preview" hidden style="display:flex;flex-direction:column;gap:8px;flex:1 1 auto;min-height:0;overflow:auto">
       <div class="note" id="pvNote"></div>
       <div class="pics" id="pvPics"></div>
-      <div class="note" id="fixHelp">有拼錯？<b>先點「拼對的格子」打勾</b>（整面都對可按「全對」；勾越多越準），中間格方向不對按「↻ 中格」，再按「換一個拼法」。</div>
+      <div class="note" id="fixHelp">圖拼錯了？按<b>「換一個拼法」</b>，程式會重新判斷每一面拍照時拿的方向；還是不對，就點下方照片<b>重拍不清楚的那一面</b>。中間格方向不對可按「↻ 中格」。</div>
       <div class="altbar"><button class="btn" id="btnAltPrev" aria-label="看上一個拼法" disabled>‹</button><button class="btn" id="btnFix">換一個拼法</button><span class="cnt" id="altCnt"></span></div>
       <div class="redo" id="pvRedo"><div class="lab">某一面拍得模糊或歪掉？點那張照片，<b>只重拍那一面</b>：</div><div class="rr" id="pvRedoRow"></div></div>
       <div class="fixbar"><button class="pill" id="btnDump">下載掃描資料</button></div>
@@ -1109,7 +1109,9 @@ function rgbaToCanvas(d,w,h){ const c=canvasOf(w,h); c.getContext('2d').putImage
 // frames: [{reg, quad, face(rgba 300x300), sh, cm?}] -> median-stacked face, then review
 async function jFinishFrames(frames){
   const f=jNext(); if(!f || !frames.length) return;
-  setStatus('整理照片中…'); await sleep(10);
+  setStatus('對準九宮格中…'); await sleep(10);
+  // fine-align the 3x3 grid on every frame: grid lines into the dark gaps between stickers
+  if(T.refine!==false && !window.__noRefine) frames=frames.map(fr=>{ try{ const r=E.refineQuad(fr.reg.d, fr.reg.w, fr.reg.h, fr.quad); if(r.n>=6 && r.moved<0.08){ return Object.assign({}, fr, { quad:r.quad, face:E.warpQuad(fr.reg.d, fr.reg.w, fr.reg.h, r.quad, FACE_PX), refined:r.moved }); } }catch(e){ console.warn(e); } return fr; });
   // keep only the largest group of frames that agree with each other (medoid), then median-stack them
   if(frames.length>3){
     const fd=(A,B)=>{ let d=0; for(let i=0;i<A.length;i+=24) d+=Math.abs(A[i]-B[i])+Math.abs(A[i+1]-B[i+1])+Math.abs(A[i+2]-B[i+2]); return d; };
@@ -1277,10 +1279,10 @@ function jCells(){
 }
 async function doJigsaw(reopts, label){
   if(jCount()<6) return;
-  const lab = label || (reopts ? '換一個拼法中…' : '自動拼圖中…（約 5～20 秒）');
+  const lab = label || (reopts ? '換一個拼法中…' : '自動拼圖中…（約 20～50 秒，請稍候）');
   busy(true, lab); const t0=Date.now(); const tick=setInterval(()=>{ $('busyText').textContent=lab.replace(/（.*）/,'')+' '+Math.round((Date.now()-t0)/1000)+' 秒'; },500);
   const cells=jCells();
-  const res=await runJigsaw({ cells: cells.map(c=>({S:c.S,data:Array.from(c.data)})), opts: reopts || { rotSearch:[0,3], timeMs:2400 }, centers: $('optCenters').checked });
+  const res=await runJigsaw({ cells: cells.map(c=>({S:c.S,data:Array.from(c.data)})), opts: reopts || { rotSearch:[0,1,3,4,5], rotBeam:120, rotPrefer:[1,4,5], timeMs:2400 }, centers: $('optCenters').checked });
   clearInterval(tick); busy(false);
   if(!res.ok){ console.error(res.error); toast('拼圖失敗：'+res.error.slice(0,80), 4000); return; }
   if(!reopts){ S.alts=[res]; S.altIdx=0; S.pvLock={}; }
@@ -1309,9 +1311,9 @@ function showPreview(){
     const refresh=()=>{ btns.forEach((bt,p)=>{ const on=isOn(fi*9+p); bt.classList.toggle('on',on); bt.setAttribute('aria-pressed',on?'true':'false'); }); const all=btns.every((_,p)=>isOn(fi*9+p)); fig.classList.toggle('ok',all); okb.textContent=all?'✓ 全對':'全對'; okb.setAttribute('aria-label',J_NAMES[f]+'面整面都對'); updateFixBtn(); };
     for(let p=0;p<9;p++){ const bt=document.createElement('button'); bt.setAttribute('aria-label',J_NAMES[f]+'面第 '+(p+1)+' 格：點一下標記為拼對'); const h=fi*9+p;
       bt.onclick=()=>{ if(isOn(h)) delete S.pvLock[h]; else S.pvLock[h]=S.jres.homeImgCap[h]; refresh(); }; g9.appendChild(bt); btns.push(bt); }
-    wrap.appendChild(g9); fig.appendChild(wrap);
+    fig.appendChild(wrap);
     okb.onclick=ev=>{ ev.stopPropagation(); const all=btns.every((_,p)=>isOn(fi*9+p)); for(let p=0;p<9;p++){ const h=fi*9+p; if(all) delete S.pvLock[h]; else S.pvLock[h]=S.jres.homeImgCap[h]; } refresh(); };
-    const fc=document.createElement('figcaption'); const nm=document.createElement('span'); nm.className='nm'; nm.textContent=J_NAMES[f]; fc.appendChild(nm); fc.appendChild(okb);
+    const fc=document.createElement('figcaption'); const nm=document.createElement('span'); nm.className='nm'; nm.textContent=J_NAMES[f]; fc.appendChild(nm);
     const rb=document.createElement('button'); rb.className='rotc2'; rb.textContent='↻ 中格'; rb.setAttribute('aria-label',J_NAMES[f]+'面的中間格轉 90 度'); rb.onclick=ev=>{ ev.stopPropagation(); pvRotateCentre(fi, c); refresh(); }; fc.appendChild(rb);
     fig.appendChild(fc); el.appendChild(fig); refresh(); });
   renderRedo();
