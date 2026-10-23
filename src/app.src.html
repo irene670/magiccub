@@ -325,17 +325,22 @@ body.scanning .remain{min-height:0;font-size:12px;line-height:1.35}
   <h2>設定</h2>
   <h3>辨識方式</h3>
   <div class="seg">
-    <label><input type="radio" name="method" id="mJigsaw" value="jigsaw"><span><b>自動拼圖</b>不用事先建檔。依指示掃 6 面，程式自己把圖拼回去。適合隨機印、客製圖。</span></label>
-    <label><input type="radio" name="method" id="mLibrary" value="library"><span><b>圖庫比對</b>先用還原好的方塊建一次標準圖（校正），之後掃描順序不拘，最穩定。</span></label>
+    <label><input type="radio" name="recog" id="rDesign" value="design"><span><b>圖案檔比對（推薦）</b>用「還原好的方塊」6 面照片當標準，辨識最準。</span></label>
+    <label><input type="radio" name="recog" id="rJigsaw" value="jigsaw"><span><b>自動拼圖</b>沒有圖案檔時用，程式自己把圖拼回去，成功率較低。</span></label>
+  </div>
+  <div class="seg" hidden>
+    <label><input type="radio" name="method" id="mJigsaw" value="jigsaw"><span>guided</span></label>
+    <label><input type="radio" name="method" id="mLibrary" value="library"><span>legacy</span></label>
   </div>
   <label class="toggle"><input type="checkbox" id="optCenters" checked> 中間那格的圖案也要轉正（步數較多）</label>
   <p>關閉後只保證 6 面圖塊歸位，最多約 21 步；中心格的圖可能是歪的。開啟後中心圖也會轉正，通常 30～50 步。</p>
   <label class="toggle"><input type="checkbox" id="optAuto" checked> 對準後自動擷取</label>
-  <h3>圖庫校正（只有「圖庫比對」需要）</h3>
-  <p>App 需要知道「還原後」每一面長什麼樣子，才能把打亂的方塊解回去。請拿一顆<b>已經還原好</b>的方塊做一次校正。</p>
-  <div class="row"><button class="btn primary" id="btnCalib">開始校正</button></div>
-  <div class="row" style="margin-top:8px"><button class="btn small" id="btnExport">匯出校正檔</button><button class="btn small" id="btnImport">匯入校正檔</button><button class="btn small" id="btnSim">模擬掃描測試</button></div>
+  <h3>圖案檔（店家用）</h3>
   <p id="calibInfo"></p>
+  <p>建立新圖案：把<b>已經還原好</b>的方塊照一般流程掃完 6 面（不要按下一步），再按下面的按鈕。下載的檔案放到網站的 designs 資料夾，客人用 <code>網址?d=代碼</code> 打開就會用這組圖案。</p>
+  <div class="row"><button class="btn primary small" id="btnMakeDesign">用剛掃的 6 面建立圖案檔</button></div>
+  <div class="row" style="margin-top:8px"><button class="btn small" id="btnExport">匯出圖案檔</button><button class="btn small" id="btnImport">匯入圖案檔</button><button class="btn small" id="btnUseDefault">改回標準圖案</button></div>
+  <div class="row" style="margin-top:8px"><button class="btn small" id="btnSim">模擬掃描測試</button><button class="btn small" id="btnCalib" hidden>舊版校正</button></div>
   <div class="row" style="margin-top:12px"><button class="btn ghost" id="btnCloseSettings">關閉</button></div>
 </div></div>
 
@@ -416,13 +421,15 @@ async function setCalibration(cal){
   }
   S.ref = E.buildReference(pats);
   $('demoBanner').hidden = !cal.demo || S.method!=='library';
-  $('calibInfo').textContent = cal.demo ? '目前狀態：使用示範圖案（用你傳來的照片暫代，掃描實體方塊前請先校正）。' : ('目前狀態：已校正' + (cal.updated? '（'+new Date(cal.updated).toLocaleString()+'）':'') + (cal.shared? '，所有人共用。':'，存在這台裝置。'));
+  $('calibInfo').textContent = '目前圖案：' + (cal.name || (cal.builtin ? '標準圖案' : '自訂圖案')) + (cal.code ? '（代碼 '+cal.code+'）' : '') + (cal.updated && !cal.builtin ? '，建立於 '+new Date(cal.updated).toLocaleString() : '');
   renderRemain(); renderChips();
 }
 async function loadCalibration(){
   let cal=null;
   const raw = store.get('pc_calib_v1'); if(raw){ try{ cal=JSON.parse(raw); }catch(e){} }
-  if(!cal) cal = { faces: DEMO_FACES, names: Object.assign({},DEFAULT_NAMES), demo: true };
+  const code = new URLSearchParams(location.search).get('d');
+  if(code){ try{ const r=await fetch('designs/'+encodeURIComponent(code)+'.json',{cache:'no-store'}); if(r.ok){ const j=await r.json(); if(F.every(x=>j.faces&&j.faces[x])) cal={faces:j.faces, names:Object.assign({},DEFAULT_NAMES), name:j.name||code, code}; } else toast('找不到圖案代碼「'+code+'」，改用標準圖案', 3500); }catch(e){ console.warn(e); } }
+  if(!cal) cal = { faces: DESIGN_DEFAULT.faces, names: Object.assign({},DEFAULT_NAMES), name: DESIGN_DEFAULT.name, builtin: true };
   await setCalibration(cal);
   // shared calibration (when hosted as a Claude artifact with a database)
   try {
@@ -749,7 +756,29 @@ $('filePhoto').onchange=async e=>{
 $('btnCapture').onclick=()=>captureNow(false);
 $('btnFlip').onclick=()=>{ S.facing = S.facing==='user'?'environment':'user'; startCamera(); };
 $('btnUndo').onclick=()=>{ if(S.method==='jigsaw'){ const last=[...J_ORDER].reverse().find(f=>S.jf[f]); if(last){ delete S.jf[last]; if(S.doneLive) delete S.doneLive[last]; S.jpending=null; jShowScanCube(); jRenderChips(); jRenderRemain(); jUpdateProgress(); jReady(); toast('請重拍「'+J_NAMES[last]+'」面'); } return; } if(S.caps.length) removeCap(S.caps.length-1); };
-$('btnNext').onclick=()=> S.method==='jigsaw' ? doJigsaw() : doSolve();
+$('btnNext').onclick=()=> S.method==='jigsaw' ? ((S.recog==='design' && S.ref) ? doDesign() : doJigsaw()) : doSolve();
+// recognise against the design (solved-cube photos), in the frame the customer is holding the cube
+async function doDesign(){
+  if(jCount()<6) return;
+  busy(true,'辨識方塊中…'); await sleep(30);
+  let r=null;
+  try{
+    const refPats=[]; for(const f of F) refPats.push(...patchesOfCanvas(S.refFaceCanvas[f]));
+    const caps=F.map(f=>({patches:S.jf[f].patches}));
+    r=E.libraryHold(refPats, caps);
+  }catch(e){ console.error(e); }
+  if(!r || !r.ok){ busy(false); toast('跟目前的圖案檔對不起來，改用自動拼圖', 3500); return doJigsaw(); }
+  busy(true,'計算解法…'); await sleep(30);
+  let sol=null;
+  try{ const st=E.cloneState(r.rec.state); sol = $('optCenters').checked ? E.solve(st, window.min2phase, {timeMs:1800}) : (()=>{ const s=window.min2phase.solve(E.toFacelets(st)); const mv=E.parseAlg(s); return {moves:mv, verified:E.isSolved(E.applyAlg(E.cloneState(st),s),false), base:mv.length, fix:0}; })(); }catch(e){ console.error(e); }
+  busy(false);
+  if(!sol || sol.error){ toast('解法計算失敗'); return; }
+  // textures: home facelet k shows design sticker map[k] (re-oriented to the customer's hold)
+  S.refCells = r.map.map(([id,q])=>cellCanvas(S.refFaceCanvas[F[Math.floor(id/9)]], id%9, q));
+  S.solution={ moves:sol.moves, verified:sol.verified, base:sol.base, fix:sol.fix };
+  S.step=0; S.startState=E.cloneState(r.rec.state); S.curState=E.cloneState(r.rec.state);
+  enterSolve();
+}
 $('demoBanner').onclick=()=>openCalib();
 
 // ---------------- solve ----------------
@@ -1396,8 +1425,7 @@ function backToScan(){
 }
 // simulated test for jigsaw mode: scramble the demo pictures and fake the 6 guided scans
 async function jSimulate(){
-  const pics=await Promise.all(DEMO_PICS.map(loadImg));
-  const faceCv=pics.map(im=>{ const c=canvasOf(FACE_PX,FACE_PX); c.getContext('2d').drawImage(im,0,0,FACE_PX,FACE_PX); return c; });
+  const faceCv=F.map(f=>S.refFaceCanvas[f]);
   const sc=Array.from({length:25},()=>'URFDLB'[Math.random()*6|0]+['',"'",'2'][Math.random()*3|0]).join(' ');
   const stT=E.applyAlg(E.solvedState(),sc); S.simTruth={fac:E.toFacelets(stT), cr:E.centerRots(stT).join(',')}; S.simTruthState=stT; S.simRotUsed={}; const m=E.bySlot(stT); S.jf={}; jShowScanCube(); jRenderChips();
   for(const f of J_ORDER){
@@ -1421,12 +1449,24 @@ function setMethod(m){
   if(S.mode==='scan'){ showScanCube(); renderChips(); renderRemain(); updateProgress(); if(m==='jigsaw') jReady(); else setJState(null); }
 }
 $('mJigsaw').onchange=()=>setMethod('jigsaw'); $('mLibrary').onchange=()=>setMethod('library');
+function setRecog(r){ S.recog=r; store.set('pc_recog',r); $('rDesign').checked=r==='design'; $('rJigsaw').checked=r==='jigsaw'; }
+$('rDesign').onchange=()=>setRecog('design'); $('rJigsaw').onchange=()=>setRecog('jigsaw');
+$('btnMakeDesign').onclick=async()=>{
+  if(jCount()<6){ toast('請先把還原好的方塊 6 面都掃完'); return; }
+  const faces={}; for(const f of F) faces[f]=S.jf[f].face.toDataURL('image/jpeg',0.88);
+  const code='d'+Date.now().toString(36);
+  await saveCalibration({faces, names:Object.assign({},DEFAULT_NAMES), name:'自訂圖案 '+code});
+  const blob=new Blob([JSON.stringify({name:'自訂圖案 '+code, faces})],{type:'application/json'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=code+'.json'; document.body.appendChild(a); a.click(); a.remove();
+  toast('已建立圖案檔 '+code+'，這台裝置之後都會用它', 3500);
+};
+$('btnUseDefault').onclick=async()=>{ store.set('pc_calib_v1',''); await setCalibration({ faces: DESIGN_DEFAULT.faces, names: Object.assign({},DEFAULT_NAMES), name: DESIGN_DEFAULT.name, builtin:true }); toast('已改回標準圖案'); };
 
 
 // ---------------- boot ----------------
 (async function boot(){
   initThree(); layoutGuide(); new ResizeObserver(layoutGuide).observe($('viewport'));
-  S.method = store.get('pc_method') || 'jigsaw';
+  S.method = 'jigsaw'; setRecog(store.get('pc_recog') || 'design');
   await loadCalibration();
   setMethod(S.method);
   renderChips(); updateProgress(); showScanCube();

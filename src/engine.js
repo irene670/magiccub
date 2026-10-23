@@ -462,7 +462,22 @@ function solve(state, min2phase, opts) {
   return best;
 }
 
-const api = { faceSimilarity, FACES, NRM, UPV, RGT, CORNERS, EDGES, CPL, EPL, slotPos, slotIndex, qOf, vecOfQ, solvedState, applyMove, applyAlg, parseAlg, fmtMove, cloneState, bySlot, toFacelets, centerRots, isSolved, simplify, hungarian, rotPatchCW, descriptor, dist2, buildReference, capPos, identifyFace, reconstruct, checkState, setCenterAlgs, buildFixTable, centerFix, solve, ROTS, W };
+// library mode for a cube held the guided way: re-orient the reference (a solved-cube photo set) so its
+// frame matches how the customer held the cube (captures given in FACES order: U R F D L B as held)
+function libraryHold(refPats, caps, opts) {
+  opts = opts || {};
+  const ref0 = buildReference(refPats);
+  const rec0 = reconstruct(ref0, caps);
+  const g = CUBE_ROTS.find(G => rec0.faceOfCap.every((rf, i) => eq(G.apply(NRM[FACES[rf]]), NRM[FACES[i]])));
+  if (!g) return { rec: rec0, ok: false, reason: 'centres' };
+  const m = bySlot(solvedState().map(x => ({ id: x.id, pos: g.apply(x.pos), n: g.apply(x.n), up: g.apply(x.up) })));
+  const map = [], pats = [];
+  for (let k = 0; k < 54; k++) { const q = qOf(FACES[Math.floor(k / 9)], m[k].up); map.push([m[k].id, q]); let p = refPats[m[k].id]; for (let i = 0; i < q; i++) p = rotPatchCW(p); pats.push(p); }
+  const ref = buildReference(pats);
+  const rec = reconstruct(ref, caps, { faceOfCap: [0, 1, 2, 3, 4, 5] });
+  return { rec, map, ok: rec.valid, rec0 };
+}
+const api = { libraryHold, CUBE_ROTS, faceSimilarity, FACES, NRM, UPV, RGT, CORNERS, EDGES, CPL, EPL, slotPos, slotIndex, qOf, vecOfQ, solvedState, applyMove, applyAlg, parseAlg, fmtMove, cloneState, bySlot, toFacelets, centerRots, isSolved, simplify, hungarian, rotPatchCW, descriptor, dist2, buildReference, capPos, identifyFace, reconstruct, checkState, setCenterAlgs, buildFixTable, centerFix, solve, ROTS, W };
 if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.CubeEngine = api;
 })(typeof window !== 'undefined' ? window : globalThis);
 // ---- shared patch extraction (RGBA buffer -> 9 patches) ----
@@ -613,6 +628,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api; else 
     while (g < 8 && prof[g] < 0.8 * inner) g++;
     return { g, prof: Array.from(prof).map(x => +x.toFixed(2)) };
   }
+  E._jwdbg = { strips: p => strips(p), dis: (a, b) => dis(a, b), JW };
   function jigsaw(cells54, opts) {
     opts = opts || {};
     if (!opts._trim && JW.autoTrim !== false && opts.autoTrim !== false) {
