@@ -535,7 +535,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api; else 
 (function(){
   const E = (typeof module !== 'undefined' && module.exports) ? module.exports : (typeof window !== 'undefined' ? window.CubeEngine : globalThis.CubeEngine);
   const { CPL, EPL, FACES, slotPos, NRM, vecOfQ, hungarian, checkState, rotPatchCW } = E;
-  const JW = { depth0: 2, depth1: 5, n: 24, grad: 0.3, pred: 1.2, col: 0.5, eps: 0.05, S: 48, inv: 0, abs: 0, log: false, lim: 0.22 };
+  const JW = { autoTrim: false, depth0: 2, depth1: 5, n: 24, grad: 0.3, pred: 1.2, col: 0.5, eps: 0.05, S: 48, inv: 0, abs: 0, log: false, lim: 0.22 };
   // strips of an image: side 0=top,1=right,2=bottom,3=left ; each -> [outer line, inner line] arrays (n*3)
   function strips(p) {
     const S = p.S, D = p.data, n = JW.n, seg = S / n, out = [];
@@ -605,8 +605,22 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api; else 
     }
     return lg.map(x => Math.exp(x));
   }
+  // dark plastic gaps between stickers: find how deep the dark border is, so seams compare picture, not plastic
+  function gapDepth(cells) {
+    const S = cells[0].S, prof = new Float64Array(14);
+    for (const p of cells) { const D = p.data; for (let d = 0; d < 14; d++) { let s = 0, n = 0; for (let t = 4; t < S - 4; t++) { for (const [r, c] of [[d, t], [S - 1 - d, t], [t, d], [t, S - 1 - d]]) { const i = (r * S + c) * 3; s += D[i] + D[i + 1] + D[i + 2]; n++; } } prof[d] += s / n / cells.length; } }
+    const inner = (prof[9] + prof[10] + prof[11] + prof[12]) / 4; let g = 0;
+    while (g < 8 && prof[g] < 0.8 * inner) g++;
+    return { g, prof: Array.from(prof).map(x => +x.toFixed(2)) };
+  }
   function jigsaw(cells54, opts) {
     opts = opts || {};
+    if (!opts._trim && JW.autoTrim !== false && opts.autoTrim !== false) {
+      const gd = gapDepth(cells54); const d0 = JW.depth0, d1 = JW.depth1;
+      const sh = Math.max(0, gd.g - 1);
+      JW.depth0 = d0 + sh; JW.depth1 = d1 + sh;
+      try { const r = jigsaw(cells54, Object.assign({}, opts, { _trim: true })); r.gap = gd; return r; } finally { JW.depth0 = d0; JW.depth1 = d1; }
+    }
     if (opts.em !== false) {
       const o1 = Object.assign({}, opts, { em: false, timeMs: (opts.timeMs || 2500) / 2 });
       const r1 = jigsaw(cells54, o1);
@@ -665,6 +679,9 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api; else 
     }
     const okEnt = ent => { if (!LOCKCAP) return true; for (let i = 0; i < ent.length; i++) { const h = ent[i][0], id = ent[i][1]; if (LS[h] >= 0 && LS[h] !== id) return false; if (LI[id] >= 0 && LI[id] !== h) return false; } return true; };
     const detOk = det => { if (!LOCKCAP) return true; const img = homeImages(det); for (let h = 0; h < 54; h++) if (LS[h] >= 0 && img[h] !== LS[h]) return false; return true; };
+    // assemblies the customer has already seen (as captured image ids per home facelet): opts.avoid = [homeImgCap, ...]
+    const AV = opts.avoid && opts.avoid.length ? opts.avoid : null, AVMIN = opts.avoidMin || 3;
+    const avoided = det => { if (!AV) return false; const img = homeImages(det); for (const a of AV) { let d = 0; for (let h = 0; h < 54 && d < AVMIN; h++) if ((MAP ? MAP[img[h]] : img[h]) !== a[h]) d++; if (d < AVMIN) return true; } return false; };
     function setTables(fr) {
       if (fr.every(x => x === 0)) { Hn = Hbase; Vn = Vbase; MAP = null; buildLocks(); return; }
       const M = mapFor(fr); MAP = M; Hn = new Float64Array(NI * NI); Vn = new Float64Array(NI * NI);
@@ -879,10 +896,19 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api; else 
     // which way were the faces held? try rotations of the listed faces (cheap: tables are only permuted)
     let faceRot = opts.faceRot ? opts.faceRot.slice() : [0, 0, 0, 0, 0, 0];
     const rotFaces = opts.rotSearch || [];
+    const feasible = fr => {
+        setTables(fr); if (!LOCKCAP) return true;
+        for (let K = 0; K < 8; K++) { const fac = E.CORNERS[K].fac; if (!fac.some(h => LS[h] >= 0)) continue; let ok = false; for (let s2 = 0; s2 < 8 && !ok; s2++) for (let t = 0; t < 3 && !ok; t++) if (okEnt(CENT[s2][K][t])) ok = true; if (!ok) return false; }
+        for (let K = 0; K < 12; K++) { const fac = E.EDGES[K].fac; if (!fac.some(h => LS[h] >= 0)) continue; let ok = false; for (let s2 = 0; s2 < 12 && !ok; s2++) for (let t = 0; t < 2 && !ok; t++) if (okEnt(EENT[s2][K][t])) ok = true; if (!ok) return false; }
+        return true;
+      };
+
     if (rotFaces.length) {
       let bestR = null; const nComb = Math.pow(4, rotFaces.length); const hyp = [];
       for (let code = 0; code < nComb; code++) {
         const fr = faceRot.slice(); rotFaces.forEach((f, i) => fr[f] = (code >> (2 * i)) & 3);
+        if (opts.skipRot && opts.skipRot.includes(fr.join(''))) continue;
+        if (LOCKCAP && !feasible(fr)) continue;
         setTables(fr);
         const br = beamSearch(opts.rotBeam || 300, 0).slice(0, 2).map(r => descend(clone(r.det)));
         const sc = Math.min(...br); hyp.push([sc, fr.join('')]);
@@ -890,6 +916,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api; else 
       }
       // re-check the 3 best hypotheses more thoroughly
       hyp.sort((a, b) => a[0] - b[0]); let best2 = null;
+      if (!hyp.length) hyp.push([0, faceRot.join('')]);
       for (const [, key] of hyp.slice(0, 3)) {
         const fr = key.split('').map(Number); setTables(fr);
         let br = []; for (const st of [0, 3]) br = br.concat(beamSearch(700, st));
@@ -897,18 +924,12 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api; else 
         const sc = Math.min(...br.slice(0, 4).map(r => descend(clone(r.det))));
         if (!best2 || sc < best2.score) best2 = { score: sc, fr };
       }
-      bestR = best2;
+      bestR = best2 || { fr: faceRot };
       faceRot = bestR.fr; if (opts.debug) console.log('  [rot]', hyp.sort((a, b) => a[0] - b[0]).slice(0, 4).map(h => h[1] + ':' + h[0].toFixed(1)).join(' '));
     }
     if (opts.rotGreedy && opts.rotGreedy.length) {
       const quick = fr => { setTables(fr); const br = beamSearch(opts.rotBeam || 300, opts.rotStart || 0); if (!br.length) return 1e18; return Math.min(...br.slice(0, 2).map(r => { const d = clone(r.det); const v = descend(d); return detOk(d) ? v : v + 1e6; })); };
       // with locked faces: only rotations under which every locked piece can actually be placed
-      const feasible = fr => {
-        setTables(fr); if (!LOCKCAP) return true;
-        for (let K = 0; K < 8; K++) { const fac = E.CORNERS[K].fac; if (!fac.some(h => LS[h] >= 0)) continue; let ok = false; for (let s2 = 0; s2 < 8 && !ok; s2++) for (let t = 0; t < 3 && !ok; t++) if (okEnt(CENT[s2][K][t])) ok = true; if (!ok) return false; }
-        for (let K = 0; K < 12; K++) { const fac = E.EDGES[K].fac; if (!fac.some(h => LS[h] >= 0)) continue; let ok = false; for (let s2 = 0; s2 < 12 && !ok; s2++) for (let t = 0; t < 2 && !ok; t++) if (okEnt(EENT[s2][K][t])) ok = true; if (!ok) return false; }
-        return true;
-      };
       const faces = opts.rotGreedy;
       if (LOCKCAP) {
         const cands = []; const n = Math.pow(4, faces.length);
@@ -932,8 +953,9 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api; else 
     for (const st of (opts.starts || [0, 2, 3, 5])) beamRes = beamRes.concat(beamSearch(opts.beam || 1200, st));
     if (!beamRes.length) beamRes = [{ det: { cq: [0, 0, 0, 0, 0, 0], corners: [0, 1, 2, 3, 4, 5, 6, 7].map(i => [i, 0]), edges: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map(i => [i, 0]) }, score: 1e9 }];
     beamRes.sort((a, b) => a.score - b.score);
-    const seeds = beamRes.slice(0, opts.beamKeep || 16).map(r => ({ det: r.det, score: descend(r.det) }))
+    let seeds = beamRes.slice(0, opts.beamKeep || 16).map(r => ({ det: r.det, score: descend(r.det) }))
       .sort((a, b) => a.score - b.score);
+    if (AV) { const fresh = seeds.filter(x => !avoided(x.det)); if (fresh.length) seeds = fresh; else { const more = beamRes.slice(16, 120).filter(r => !avoided(r.det)).slice(0, 8).map(r => { const d = clone(r.det); const sc = descend(d); return { det: avoided(d) ? clone(r.det) : d, score: avoided(d) ? score(homeImages(r.det)) : sc }; }); if (more.length) seeds = more; } }
     if (opts.debug) console.log('  [beam] best', beamRes[0].score.toFixed(2), 'after descend', seeds[0].score.toFixed(2));
     // 3) iterated local search: perturb (centres / edges / corners), re-optimise exactly, keep if better
     const results = [];
@@ -949,21 +971,24 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api; else 
         else { const a = ri(8), b = ri(8); const t = d.corners[a]; d.corners[a] = [d.corners[b][0], ri(3)]; d.corners[b] = [t[0], ri(3)]; }
         // after a centre change, edges are re-fit first from centres + corners
         const sc = descend(d);
-        if (sc < curS - 1e-9 && detOk(d)) { cur = d; curS = sc; }
+        if (sc < curS - 1e-9 && detOk(d) && !avoided(d)) { cur = d; curS = sc; }
       }
       if (opts.debug) console.log("  [ils] seed", r, "iters", it, "score", curS.toFixed(2)); results.push({ det: cur, score: curS });
     }
     results.sort((a, b) => a.score - b.score);
     // final: best LEGAL candidate among (a) legal beam solutions, (b) descended / ILS results (repaired if needed)
     let chosen = null;
-    const consider = c => { if (c && detOk(c.det) && (!chosen || c.score < chosen.score - 1e-9)) chosen = c; };
+    let skipAvoid = !!AV;
+    const consider = c => { if (c && detOk(c.det) && !(skipAvoid && avoided(c.det)) && (!chosen || c.score < chosen.score - 1e-9)) chosen = c; };
     let nLegal = 0;
-    for (const r of beamRes) { if (nLegal >= 40) break; if (checkState(buildState(r.det)).ok) { nLegal++; const d = clone(r.det); const sc = score(homeImages(d)); consider({ det: d, score: sc }); } }
+    for (const r of beamRes) { if (nLegal >= (AV ? 300 : 40)) break; if (checkState(buildState(r.det)).ok) { nLegal++; const d = clone(r.det); const sc = score(homeImages(d)); consider({ det: d, score: sc }); } }
     const pool = results.concat(seeds).sort((a, b) => a.score - b.score).slice(0, 6);
     for (const r of pool) {
       if (checkState(buildState(r.det)).ok) consider({ det: r.det, score: score(homeImages(r.det)) });
       else consider(repair(r.det));
     }
+    let noAlt = false;
+    if (!chosen && AV) { noAlt = true; skipAvoid = false; for (const r of pool) { if (checkState(buildState(r.det)).ok) consider({ det: r.det, score: score(homeImages(r.det)) }); else consider(repair(r.det)); } }
     if (!chosen) chosen = { det: results[0].det, score: results[0].score, invalid: true };
     const state = buildState(chosen.det);
     const img = homeImages(chosen.det);
@@ -971,7 +996,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api; else 
     // per home facelet confidence: its worst seam cost (normalised)
     const conf = new Array(54).fill(0);
     for (let fi = 0; fi < 54; fi++) conf[fi] = localCost(img, [[fi, img[fi]]], []) / (NB[fi].length * scale);
-    return { faceRot, homeImgCap: img.map(id => MAP ? MAP[id] : id), truthImg: opts.truthDet ? homeImages(opts.truthDet) : null, truthScore, state, homeImg: img, score: chosen.score / scale, valid: checkState(state).ok, conf, det: chosen.det };
+    return { faceRot, homeImgCap: img.map(id => MAP ? MAP[id] : id), truthImg: opts.truthDet ? homeImages(opts.truthDet) : null, truthScore, state, homeImg: img, score: chosen.score / scale, valid: checkState(state).ok, conf, det: chosen.det, noAlt };
 
     function buildState(det) {
       const st = [];

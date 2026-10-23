@@ -120,6 +120,36 @@ header h1 small{font-family:var(--f-body);font-weight:500;font-size:12px;color:v
 .fixbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .pics .rotc::before{content:"";position:absolute;inset:6px;border-radius:50%;background:rgba(17,20,28,.75);z-index:-1}
 .pics .rotc{z-index:0}
+.pics .pvc{position:relative;line-height:0}
+.pics .pvc canvas{width:100%;display:block}
+.pics .g9{position:absolute;inset:0;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr)}
+.pics .g9 button{border:0;margin:0;padding:0;background:transparent;cursor:pointer;position:relative;-webkit-tap-highlight-color:transparent}
+.pics .g9 button.on{box-shadow:inset 0 0 0 3px var(--ok);background:rgba(98,196,120,.18)}
+.pics .g9 button.on::after{content:"✓";position:absolute;right:3px;top:2px;font-size:12px;line-height:1;font-weight:800;color:#10301a;background:var(--ok);border-radius:99px;padding:2px 4px}
+.pics figure{cursor:default}
+.pics figcaption .okb{position:static;pointer-events:auto;cursor:pointer;min-height:30px;font-size:11px;padding:0 7px;max-width:none;flex:none}
+.pics figcaption .nm{font-weight:700;flex:none}
+.pics figcaption{gap:3px}
+.pics figcaption .rotc2{padding:0 6px;min-height:30px;flex:none}
+.pics figcaption{display:flex;align-items:center;justify-content:space-between;gap:4px;line-height:1.2}
+.pics figcaption .rotc2{border:1px solid var(--line);background:transparent;color:var(--paper);border-radius:99px;font-size:11px;min-height:28px;padding:0 8px;cursor:pointer}
+.altbar{display:flex;gap:8px;align-items:center}
+.altbar .btn{flex:1}
+.altbar #btnAltPrev{flex:0 0 auto;min-width:44px;padding-inline:12px}
+.altbar .cnt{font-size:12px;color:var(--muted);white-space:nowrap}
+.redo{display:flex;flex-direction:column;gap:6px;border-top:1px solid var(--line);padding-top:8px}
+.redo .lab{font-size:13px;color:var(--muted)}
+.redo .rr{display:grid;grid-template-columns:repeat(6,1fr);gap:6px}
+.redo button{position:relative;border:1px solid var(--line);background:var(--wall);border-radius:10px;padding:3px;color:var(--paper);font-size:11px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;min-height:44px}
+.redo button canvas{width:100%;aspect-ratio:1;border-radius:6px;display:block}
+.redo button .warn{position:absolute;right:-4px;top:-4px;background:var(--gold);color:var(--gold-ink);border-radius:99px;font-weight:800;font-size:11px;width:18px;height:18px;display:grid;place-items:center}
+.lesson{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);margin-bottom:4px}
+.lesson .ph{color:var(--gold);font-weight:700;white-space:nowrap}
+.lesson .bar{flex:1;height:6px;border-radius:99px;background:var(--line);overflow:hidden;min-width:40px}
+.lesson .bar i{display:block;height:100%;background:var(--ok);border-radius:99px;transition:width .3s}
+.lesson .num{font-family:var(--f-mono);white-space:nowrap}
+.movecard .desc .eff{display:block;font-size:13px;color:var(--paper);margin-top:3px}
+.movecard .desc .eff.plus{color:var(--ok)}
 .pvActions{position:sticky;bottom:0;background:var(--ink);padding-block:8px 2px;margin-top:auto;z-index:2}
 .pics canvas{width:100%;aspect-ratio:1;border-radius:8px;border:1px solid var(--line);display:block}
 .pics figcaption{font-size:11px;color:var(--muted);text-align:center}
@@ -139,7 +169,7 @@ body.solving #stage{height:min(41dvh,360px)}
 body.solving #solve>*{flex:none}
 body.solving .moves{min-height:40px}
 #btnHomeView{position:absolute;right:10px;bottom:10px;z-index:2}
-#viewTag{position:absolute;left:10px;top:10px;z-index:2;font-size:12px;font-weight:700;background:var(--gold);color:var(--gold-ink);border-radius:99px;padding:3px 10px}
+#viewTag{position:absolute;left:10px;bottom:12px;width:max-content;max-width:calc(100% - 96px);line-height:1.35;z-index:2;font-size:12px;font-weight:700;background:var(--gold);color:var(--gold-ink);border-radius:99px;padding:3px 10px}
 body.solving .chips{display:none}
 body.solving #solve{overflow-y:auto;overscroll-behavior:contain;padding-bottom:4px}
 body.solving .hold{padding:6px 10px;font-size:12px}
@@ -263,7 +293,7 @@ body.scanning .remain{min-height:0;font-size:12px;line-height:1.35}
     <!-- solve -->
     <div id="solve" hidden>
       <div class="hold" id="hold"></div>
-      <div class="movecard"><div class="desc" id="mvDesc"></div></div>
+      <div class="movecard"><div class="desc"><div class="lesson" id="lesson"></div><div id="mvDesc"></div></div></div>
       <div class="moves" id="moves"></div>
       <div class="row">
         <button class="btn" id="btnPrev">◀ 上一步</button>
@@ -280,8 +310,10 @@ body.scanning .remain{min-height:0;font-size:12px;line-height:1.35}
     <div id="preview" hidden style="display:flex;flex-direction:column;gap:8px;flex:1 1 auto;min-height:0;overflow:auto">
       <div class="note" id="pvNote"></div>
       <div class="pics" id="pvPics"></div>
-      <div class="note" id="fixHelp">有拼錯？<b>點一下「拼對的面」打勾</b>（建議至少 2 面，越多越準），再按「依標記重新拼圖」。中間格方向不對可按圖右下角 ↻。</div>
-      <div class="fixbar"><button class="btn" id="btnFix" disabled>依標記重新拼圖</button><button class="pill" id="btnDump">下載掃描資料</button></div>
+      <div class="note" id="fixHelp">有拼錯？<b>先點「拼對的格子」打勾</b>（整面都對可按「全對」；勾越多越準），中間格方向不對按「↻ 中格」，再按「換一個拼法」。</div>
+      <div class="altbar"><button class="btn" id="btnAltPrev" aria-label="看上一個拼法" disabled>‹</button><button class="btn" id="btnFix">換一個拼法</button><span class="cnt" id="altCnt"></span></div>
+      <div class="redo" id="pvRedo"><div class="lab">某一面拍得模糊或歪掉？點那張照片，<b>只重拍那一面</b>：</div><div class="rr" id="pvRedoRow"></div></div>
+      <div class="fixbar"><button class="pill" id="btnDump">下載掃描資料</button></div>
       <div class="row pvActions">
         <button class="btn ghost" id="btnPvBack">回去重拍</button>
         <button class="btn primary" id="btnPvOk">圖都對了，開始解鎖</button>
@@ -2266,7 +2298,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api; else 
 (function(){
   const E = (typeof module !== 'undefined' && module.exports) ? module.exports : (typeof window !== 'undefined' ? window.CubeEngine : globalThis.CubeEngine);
   const { CPL, EPL, FACES, slotPos, NRM, vecOfQ, hungarian, checkState, rotPatchCW } = E;
-  const JW = { depth0: 2, depth1: 5, n: 24, grad: 0.3, pred: 1.2, col: 0.5, eps: 0.05, S: 48, inv: 0, abs: 0, log: false, lim: 0.22 };
+  const JW = { autoTrim: false, depth0: 2, depth1: 5, n: 24, grad: 0.3, pred: 1.2, col: 0.5, eps: 0.05, S: 48, inv: 0, abs: 0, log: false, lim: 0.22 };
   // strips of an image: side 0=top,1=right,2=bottom,3=left ; each -> [outer line, inner line] arrays (n*3)
   function strips(p) {
     const S = p.S, D = p.data, n = JW.n, seg = S / n, out = [];
@@ -2336,8 +2368,22 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api; else 
     }
     return lg.map(x => Math.exp(x));
   }
+  // dark plastic gaps between stickers: find how deep the dark border is, so seams compare picture, not plastic
+  function gapDepth(cells) {
+    const S = cells[0].S, prof = new Float64Array(14);
+    for (const p of cells) { const D = p.data; for (let d = 0; d < 14; d++) { let s = 0, n = 0; for (let t = 4; t < S - 4; t++) { for (const [r, c] of [[d, t], [S - 1 - d, t], [t, d], [t, S - 1 - d]]) { const i = (r * S + c) * 3; s += D[i] + D[i + 1] + D[i + 2]; n++; } } prof[d] += s / n / cells.length; } }
+    const inner = (prof[9] + prof[10] + prof[11] + prof[12]) / 4; let g = 0;
+    while (g < 8 && prof[g] < 0.8 * inner) g++;
+    return { g, prof: Array.from(prof).map(x => +x.toFixed(2)) };
+  }
   function jigsaw(cells54, opts) {
     opts = opts || {};
+    if (!opts._trim && JW.autoTrim !== false && opts.autoTrim !== false) {
+      const gd = gapDepth(cells54); const d0 = JW.depth0, d1 = JW.depth1;
+      const sh = Math.max(0, gd.g - 1);
+      JW.depth0 = d0 + sh; JW.depth1 = d1 + sh;
+      try { const r = jigsaw(cells54, Object.assign({}, opts, { _trim: true })); r.gap = gd; return r; } finally { JW.depth0 = d0; JW.depth1 = d1; }
+    }
     if (opts.em !== false) {
       const o1 = Object.assign({}, opts, { em: false, timeMs: (opts.timeMs || 2500) / 2 });
       const r1 = jigsaw(cells54, o1);
@@ -2396,6 +2442,9 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api; else 
     }
     const okEnt = ent => { if (!LOCKCAP) return true; for (let i = 0; i < ent.length; i++) { const h = ent[i][0], id = ent[i][1]; if (LS[h] >= 0 && LS[h] !== id) return false; if (LI[id] >= 0 && LI[id] !== h) return false; } return true; };
     const detOk = det => { if (!LOCKCAP) return true; const img = homeImages(det); for (let h = 0; h < 54; h++) if (LS[h] >= 0 && img[h] !== LS[h]) return false; return true; };
+    // assemblies the customer has already seen (as captured image ids per home facelet): opts.avoid = [homeImgCap, ...]
+    const AV = opts.avoid && opts.avoid.length ? opts.avoid : null, AVMIN = opts.avoidMin || 3;
+    const avoided = det => { if (!AV) return false; const img = homeImages(det); for (const a of AV) { let d = 0; for (let h = 0; h < 54 && d < AVMIN; h++) if ((MAP ? MAP[img[h]] : img[h]) !== a[h]) d++; if (d < AVMIN) return true; } return false; };
     function setTables(fr) {
       if (fr.every(x => x === 0)) { Hn = Hbase; Vn = Vbase; MAP = null; buildLocks(); return; }
       const M = mapFor(fr); MAP = M; Hn = new Float64Array(NI * NI); Vn = new Float64Array(NI * NI);
@@ -2610,10 +2659,19 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api; else 
     // which way were the faces held? try rotations of the listed faces (cheap: tables are only permuted)
     let faceRot = opts.faceRot ? opts.faceRot.slice() : [0, 0, 0, 0, 0, 0];
     const rotFaces = opts.rotSearch || [];
+    const feasible = fr => {
+        setTables(fr); if (!LOCKCAP) return true;
+        for (let K = 0; K < 8; K++) { const fac = E.CORNERS[K].fac; if (!fac.some(h => LS[h] >= 0)) continue; let ok = false; for (let s2 = 0; s2 < 8 && !ok; s2++) for (let t = 0; t < 3 && !ok; t++) if (okEnt(CENT[s2][K][t])) ok = true; if (!ok) return false; }
+        for (let K = 0; K < 12; K++) { const fac = E.EDGES[K].fac; if (!fac.some(h => LS[h] >= 0)) continue; let ok = false; for (let s2 = 0; s2 < 12 && !ok; s2++) for (let t = 0; t < 2 && !ok; t++) if (okEnt(EENT[s2][K][t])) ok = true; if (!ok) return false; }
+        return true;
+      };
+
     if (rotFaces.length) {
       let bestR = null; const nComb = Math.pow(4, rotFaces.length); const hyp = [];
       for (let code = 0; code < nComb; code++) {
         const fr = faceRot.slice(); rotFaces.forEach((f, i) => fr[f] = (code >> (2 * i)) & 3);
+        if (opts.skipRot && opts.skipRot.includes(fr.join(''))) continue;
+        if (LOCKCAP && !feasible(fr)) continue;
         setTables(fr);
         const br = beamSearch(opts.rotBeam || 300, 0).slice(0, 2).map(r => descend(clone(r.det)));
         const sc = Math.min(...br); hyp.push([sc, fr.join('')]);
@@ -2621,6 +2679,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api; else 
       }
       // re-check the 3 best hypotheses more thoroughly
       hyp.sort((a, b) => a[0] - b[0]); let best2 = null;
+      if (!hyp.length) hyp.push([0, faceRot.join('')]);
       for (const [, key] of hyp.slice(0, 3)) {
         const fr = key.split('').map(Number); setTables(fr);
         let br = []; for (const st of [0, 3]) br = br.concat(beamSearch(700, st));
@@ -2628,18 +2687,12 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api; else 
         const sc = Math.min(...br.slice(0, 4).map(r => descend(clone(r.det))));
         if (!best2 || sc < best2.score) best2 = { score: sc, fr };
       }
-      bestR = best2;
+      bestR = best2 || { fr: faceRot };
       faceRot = bestR.fr; if (opts.debug) console.log('  [rot]', hyp.sort((a, b) => a[0] - b[0]).slice(0, 4).map(h => h[1] + ':' + h[0].toFixed(1)).join(' '));
     }
     if (opts.rotGreedy && opts.rotGreedy.length) {
       const quick = fr => { setTables(fr); const br = beamSearch(opts.rotBeam || 300, opts.rotStart || 0); if (!br.length) return 1e18; return Math.min(...br.slice(0, 2).map(r => { const d = clone(r.det); const v = descend(d); return detOk(d) ? v : v + 1e6; })); };
       // with locked faces: only rotations under which every locked piece can actually be placed
-      const feasible = fr => {
-        setTables(fr); if (!LOCKCAP) return true;
-        for (let K = 0; K < 8; K++) { const fac = E.CORNERS[K].fac; if (!fac.some(h => LS[h] >= 0)) continue; let ok = false; for (let s2 = 0; s2 < 8 && !ok; s2++) for (let t = 0; t < 3 && !ok; t++) if (okEnt(CENT[s2][K][t])) ok = true; if (!ok) return false; }
-        for (let K = 0; K < 12; K++) { const fac = E.EDGES[K].fac; if (!fac.some(h => LS[h] >= 0)) continue; let ok = false; for (let s2 = 0; s2 < 12 && !ok; s2++) for (let t = 0; t < 2 && !ok; t++) if (okEnt(EENT[s2][K][t])) ok = true; if (!ok) return false; }
-        return true;
-      };
       const faces = opts.rotGreedy;
       if (LOCKCAP) {
         const cands = []; const n = Math.pow(4, faces.length);
@@ -2663,8 +2716,9 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api; else 
     for (const st of (opts.starts || [0, 2, 3, 5])) beamRes = beamRes.concat(beamSearch(opts.beam || 1200, st));
     if (!beamRes.length) beamRes = [{ det: { cq: [0, 0, 0, 0, 0, 0], corners: [0, 1, 2, 3, 4, 5, 6, 7].map(i => [i, 0]), edges: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map(i => [i, 0]) }, score: 1e9 }];
     beamRes.sort((a, b) => a.score - b.score);
-    const seeds = beamRes.slice(0, opts.beamKeep || 16).map(r => ({ det: r.det, score: descend(r.det) }))
+    let seeds = beamRes.slice(0, opts.beamKeep || 16).map(r => ({ det: r.det, score: descend(r.det) }))
       .sort((a, b) => a.score - b.score);
+    if (AV) { const fresh = seeds.filter(x => !avoided(x.det)); if (fresh.length) seeds = fresh; else { const more = beamRes.slice(16, 120).filter(r => !avoided(r.det)).slice(0, 8).map(r => { const d = clone(r.det); const sc = descend(d); return { det: avoided(d) ? clone(r.det) : d, score: avoided(d) ? score(homeImages(r.det)) : sc }; }); if (more.length) seeds = more; } }
     if (opts.debug) console.log('  [beam] best', beamRes[0].score.toFixed(2), 'after descend', seeds[0].score.toFixed(2));
     // 3) iterated local search: perturb (centres / edges / corners), re-optimise exactly, keep if better
     const results = [];
@@ -2680,21 +2734,24 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api; else 
         else { const a = ri(8), b = ri(8); const t = d.corners[a]; d.corners[a] = [d.corners[b][0], ri(3)]; d.corners[b] = [t[0], ri(3)]; }
         // after a centre change, edges are re-fit first from centres + corners
         const sc = descend(d);
-        if (sc < curS - 1e-9 && detOk(d)) { cur = d; curS = sc; }
+        if (sc < curS - 1e-9 && detOk(d) && !avoided(d)) { cur = d; curS = sc; }
       }
       if (opts.debug) console.log("  [ils] seed", r, "iters", it, "score", curS.toFixed(2)); results.push({ det: cur, score: curS });
     }
     results.sort((a, b) => a.score - b.score);
     // final: best LEGAL candidate among (a) legal beam solutions, (b) descended / ILS results (repaired if needed)
     let chosen = null;
-    const consider = c => { if (c && detOk(c.det) && (!chosen || c.score < chosen.score - 1e-9)) chosen = c; };
+    let skipAvoid = !!AV;
+    const consider = c => { if (c && detOk(c.det) && !(skipAvoid && avoided(c.det)) && (!chosen || c.score < chosen.score - 1e-9)) chosen = c; };
     let nLegal = 0;
-    for (const r of beamRes) { if (nLegal >= 40) break; if (checkState(buildState(r.det)).ok) { nLegal++; const d = clone(r.det); const sc = score(homeImages(d)); consider({ det: d, score: sc }); } }
+    for (const r of beamRes) { if (nLegal >= (AV ? 300 : 40)) break; if (checkState(buildState(r.det)).ok) { nLegal++; const d = clone(r.det); const sc = score(homeImages(d)); consider({ det: d, score: sc }); } }
     const pool = results.concat(seeds).sort((a, b) => a.score - b.score).slice(0, 6);
     for (const r of pool) {
       if (checkState(buildState(r.det)).ok) consider({ det: r.det, score: score(homeImages(r.det)) });
       else consider(repair(r.det));
     }
+    let noAlt = false;
+    if (!chosen && AV) { noAlt = true; skipAvoid = false; for (const r of pool) { if (checkState(buildState(r.det)).ok) consider({ det: r.det, score: score(homeImages(r.det)) }); else consider(repair(r.det)); } }
     if (!chosen) chosen = { det: results[0].det, score: results[0].score, invalid: true };
     const state = buildState(chosen.det);
     const img = homeImages(chosen.det);
@@ -2702,7 +2759,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api; else 
     // per home facelet confidence: its worst seam cost (normalised)
     const conf = new Array(54).fill(0);
     for (let fi = 0; fi < 54; fi++) conf[fi] = localCost(img, [[fi, img[fi]]], []) / (NB[fi].length * scale);
-    return { faceRot, homeImgCap: img.map(id => MAP ? MAP[id] : id), truthImg: opts.truthDet ? homeImages(opts.truthDet) : null, truthScore, state, homeImg: img, score: chosen.score / scale, valid: checkState(state).ok, conf, det: chosen.det };
+    return { faceRot, homeImgCap: img.map(id => MAP ? MAP[id] : id), truthImg: opts.truthDet ? homeImages(opts.truthDet) : null, truthScore, state, homeImg: img, score: chosen.score / scale, valid: checkState(state).ok, conf, det: chosen.det, noAlt };
 
     function buildState(det) {
       const st = [];
@@ -3145,7 +3202,7 @@ function showMoveArrow(face, k){
   const c=n.clone().multiplyScalar(1.62), R=1.08, cw = ((k%4)+4)%4===1;
   const a0=cw? 2.2 : -0.6, a1=cw? -0.6 : 2.2; const pts=[];
   for(let i=0;i<=40;i++){ const a=a0+(a1-a0)*i/40; pts.push(c.clone().add(r.clone().multiplyScalar(Math.cos(a)*R)).add(u.clone().multiplyScalar(Math.sin(a)*R))); }
-  const mat=new THREE.MeshBasicMaterial({color:0xf2c14e, depthTest:false, transparent:true, opacity:0.95});
+  const mat=new THREE.MeshBasicMaterial({color:0xf2c14e});
   const g=new THREE.Group();
   const tube=new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts),40,0.07,8,false),mat); tube.renderOrder=10; g.add(tube);
   const end=pts[pts.length-1], dir=end.clone().sub(pts[pts.length-3]).normalize();
@@ -3430,16 +3487,47 @@ function enterSolve(){
   showStateCube(S.curState); R3.view={...HOME_VIEW}; applyView(); $('btnHomeView').hidden=false;
   const hold=$('hold'); hold.innerHTML='';
   const t=document.createElement('div'); const b=document.createElement('b'); b.textContent='拿法：'; t.appendChild(b);
-  t.appendChild(document.createTextNode('跟掃描第 1 面時一樣，正面朝自己、頂部朝上，全程不要換方向。'));
+  t.appendChild(document.createTextNode('跟掃描第 1 面時一樣，正面朝自己、頂部朝上，全程不換方向。順／逆時針＝眼睛看著要轉的那一面時的方向。'));
   hold.appendChild(t);
   const sol=S.solution;
   $('solveNote').className='note '+(sol.verified?'ok':'bad');
-  $('solveNote').textContent = (sol.verified? '已用模擬驗證：照著轉完會完全還原。':'警告：驗證未通過。') + ' 共 '+sol.moves.length+' 步，每一步都只轉 90°（180° 已拆成兩步）。';
-  renderMoves(); updateUndoSolve();
+  $('solveNote').textContent = (sol.verified? '已用模擬驗證：照著轉完會完全還原。':'警告：驗證未通過。') + ' 共 '+sol.moves.length+' 步，每步只轉 90°。這是電腦算的最短解法，跟一般教學的「層先法」不同，所以有些步驟是先移開、後面才歸位。';
+  buildLessons(); renderMoves(); updateUndoSolve();
+}
+// ---- teaching: what each step does (pieces back home / centre pictures turned upright) ----
+function piecesHome(state){
+  const m=E.bySlot(state); let n=0;
+  for(const K of E.CORNERS) if(K.fac.every(h=>m[h].id===h)) n++;
+  for(const K of E.EDGES) if(K.fac.every(h=>m[h].id===h)) n++;
+  return n;
+}
+function centresOk(state){ return E.centerRots(state).filter(x=>x===0).length; }
+function buildLessons(){
+  const sol=S.solution; let st=E.cloneState(S.startState); const L=[{home:piecesHome(st), cen:centresOk(st)}];
+  sol.moves.forEach(([f,k])=>{ st=E.applyAlg(st,[[f,k]]); L.push({home:piecesHome(st), cen:centresOk(st)}); });
+  // phase 2 starts once all 20 pieces are home and stay home except for the centre-fixing sequence at the end
+  let p2=-1; for(let i=0;i<L.length;i++) if(L[i].home===20){ p2=i; break; }
+  if(p2>=0 && L[p2].cen===6) p2=-1;
+  sol.lessons=L; sol.p2=p2;
+}
+function lessonFor(i){
+  const sol=S.solution, L=sol.lessons, p2=sol.p2, two=p2>=0, N=sol.moves.length;
+  const inP2 = two && i>=p2;
+  const ph = two ? (inP2 ? '階段 2/2 · 把中間的圖轉正' : '階段 1/2 · 讓角塊和邊塊歸位') : '讓角塊和邊塊歸位';
+  const cur=L[i], nxt=L[Math.min(i+1,N)];
+  let bar, num;
+  if(inP2){ const done=Math.max(0,i-p2), tot=Math.max(1,N-p2); bar=done/tot; num='中格 '+cur.cen+'/6 正'; }
+  else { bar=cur.home/20; num='已歸位 '+cur.home+'/20'; }
+  let eff='', plus=false;
+  if(i<N){
+    if(inP2){ eff = i===p2 ? '外圍已全部歸位！接下來幾步會暫時打亂外圍、最後一起回來，目的只是把中間格的圖轉正。' : (nxt.home===20 && nxt.cen>cur.cen ? '這一步完成後外圍回來了，中間的圖也轉正了。' : '照做就好：外圍會先亂掉，最後會整個回來。'); }
+    else { const d=nxt.home-cur.home; if(d>0){ eff='這一步會讓 '+d+' 塊回到正確位置 ✓'; plus=true; } else if(d<0) eff='先把幾塊暫時移開，幫後面的步驟騰出空間。'; else eff = (cur.home<10 && i<N*0.7) ? '先整理各塊的方向和位置；這階段看起來還很亂是正常的，最後幾步會一口氣歸位。' : '調整位置，為下一步做準備。'; }
+  }
+  return { ph, bar, num, eff, plus };
 }
 function moveText(st){
   const nm=names(), f=st.f, k=((st.k%4)+4)%4;
-  return { main:'轉「'+FACE_CN[f]+'」面 · '+(k===1?'順時針':'逆時針')+' 90°', sub:'看著那一面時的方向，照 3D 上的金色箭頭轉最外面那一層。', split: st.part ? '180° 分兩次：第 '+st.part+' / 2 次' : '' };
+  return { main:'轉「'+FACE_CN[f]+'」面 · '+(k===1?'順時針':'逆時針')+' 90°', sub:'', split: st.part ? '180° 分兩次：第 '+st.part+' / 2 次' : '' };
 }
 function renderMoves(){
   const el=$('moves'); el.innerHTML='';
@@ -3449,12 +3537,17 @@ function renderMoves(){
   if(st){
     const t=moveText(st);
     const b=document.createElement('b'); b.insertAdjacentHTML('beforeend','<span class="dirIco">'+ICONS[st.k===1?'cw':'ccw']+'</span>'); b.append(t.main); d.appendChild(b);
-    const sm=document.createElement('small'); sm.textContent='第 '+(S.step+1)+' / '+S.solution.steps.length+' 步　'+t.sub; d.appendChild(sm);
+    const ls=lessonFor(S.step);
+    const ef=document.createElement('span'); ef.className='eff'+(ls.plus?' plus':''); ef.textContent=ls.eff; d.appendChild(ef);
     if(t.split){ const sp=document.createElement('span'); sp.className='split'; sp.textContent=t.split; d.appendChild(sp); }
-    const fv=FACE_VIEW[st.f]; animateView(fv, 450); $('viewTag').hidden=!fv.label; $('viewTag').textContent=fv.label;
+    const hid={B:'「後面」在 3D 背面，往左右拖可以看到箭頭',L:'「左面」在 3D 背面左側，往右拖可以看到箭頭',D:'「底面」在 3D 下方，往上拖可以看到箭頭'}[st.f]; $('viewTag').hidden=!hid; $('viewTag').textContent=hid||'';
     showMoveArrow(st.f, st.k);
-  } else { showMoveArrow(null); animateView(HOME_VIEW, 450); $('viewTag').hidden=true; const b=document.createElement('b'); b.textContent='✓ 完成！方塊已解鎖還原'; b.style.color='var(--ok)'; d.appendChild(b); }
+  } else { showMoveArrow(null); $('viewTag').hidden=true; const b=document.createElement('b'); b.textContent='✓ 完成！方塊已解鎖還原'; b.style.color='var(--ok)'; d.appendChild(b); }
   $('stageBadge').textContent = S.step+' / '+S.solution.steps.length;
+  const ls=lessonFor(S.step), le=$('lesson'); le.innerHTML='';
+  const ph=document.createElement('span'); ph.className='ph'; ph.textContent= S.step>=S.solution.moves.length ? '完成' : ls.ph; le.appendChild(ph);
+  const bar=document.createElement('span'); bar.className='bar'; const bi=document.createElement('i'); bi.style.width=Math.round((S.step>=S.solution.moves.length?1:ls.bar)*100)+'%'; bar.appendChild(bi); le.appendChild(bar);
+  const nm=document.createElement('span'); nm.className='num'; nm.textContent=ls.num; le.appendChild(nm);
   updateUndoSolve();
 }
 // flash the layer that is about to turn
@@ -3472,7 +3565,7 @@ async function jumpTo(i){ if(S.animating) return; S.playing=false; $('btnPlay').
 $('btnStep').onclick=stepFwd; $('btnPrev').onclick=stepBack;
 $('btnPlay').onclick=async()=>{ if(S.playing){ S.playing=false; $('btnPlay').textContent='▶ 自動播放'; return; } S.playing=true; $('btnPlay').textContent='❚❚ 暫停'; while(S.playing && await stepFwd()) await sleep(700); S.playing=false; $('btnPlay').textContent='▶ 自動播放'; };
 $('btnRestart').onclick=()=>jumpTo(0);
-$('btnHomeView').onclick=()=>{ const st=S.solution&&S.solution.steps[S.step]; animateView(st?FACE_VIEW[st.f]:HOME_VIEW, 400); };
+$('btnHomeView').onclick=()=>{ animateView(HOME_VIEW, 400); };
 $('btnRescan').onclick=()=>backToScan();
 
 // ---------------- calibration ----------------
@@ -3652,6 +3745,11 @@ const ICONS = {
   cw:'<svg viewBox="0 0 92 92" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><path d="M46 8a38 38 0 1 1-33 19"/><path d="M4 22l9 6 5-10"/></svg>',
   ccw:'<svg viewBox="0 0 92 92" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><path d="M46 8a38 38 0 1 0 33 19"/><path d="M88 22l-9 6-5-10"/></svg>'
 };
+const TURN_REDO = {
+  R:{ icon:'yaw', main:'先拿回正面，再整顆向左轉 90°', segs:['① 第 1 面（正面）對著鏡頭、頂部朝上','② 整顆向左轉 90°，右面轉到正前方'], path:['F','R'] },
+  B:{ icon:'yaw', main:'先拿回正面，再整顆向左轉 180°', segs:['① 第 1 面（正面）對著鏡頭、頂部朝上','② 整顆向左轉兩次 90°，背面轉到正前方'], path:['F','R','B'] },
+  L:{ icon:'yaw', main:'先拿回正面，再整顆向右轉 90°', segs:['① 第 1 面（正面）對著鏡頭、頂部朝上','② 整顆向右轉 90°，左面轉到正前方'], path:['F','L'] }
+};
 const TURN = {
   R:{ icon:'yaw', main:'整顆方塊向左轉 90°', segs:['右邊那一面會轉到正前方，頂部一樣朝上'], path:['R'] },
   B:{ icon:'yaw', main:'整顆方塊再向左轉 90°', segs:['原本的背面會轉到正前方，頂部一樣朝上'], path:['B'] },
@@ -3661,11 +3759,11 @@ const TURN = {
 };
 let TURN_TOKEN=0;
 async function showTurn(nx){
-  const t=TURN[nx], idx=J_ORDER.indexOf(nx); const tok=++TURN_TOKEN;
-  $('turnIco').innerHTML=ICONS[t.icon]; $('turnStep').textContent='第 '+(idx+1)+' / 6 面 · '+J_NAMES[nx]+'面'; $('turnText').textContent=t.main; $('turnSeg').textContent=t.segs[0];
+  const redo=S.redo===nx; const t=(redo&&TURN_REDO[nx])||TURN[nx], idx=J_ORDER.indexOf(nx); const tok=++TURN_TOKEN;
+  $('turnIco').innerHTML=ICONS[t.icon]; $('turnStep').textContent=redo ? ('重拍 · '+J_NAMES[nx]+'面') : ('第 '+(idx+1)+' / 6 面 · '+J_NAMES[nx]+'面'); $('turnText').textContent=t.main; $('turnSeg').textContent=t.segs[0];
   setStatus('請轉到「'+J_NAMES[nx]+'」面', t.main+TURN_NOTE);
   // loop the motion until the user starts scanning the new face
-  const prev=J_ORDER[idx-1];
+  const prev=redo ? 'F' : J_ORDER[idx-1];
   while(tok===TURN_TOKEN && S.jstate==='turn'){
     R3.root.quaternion.copy(VIEW_Q().multiply(holdQ(prev))); $('turnSeg').textContent=t.segs[0];
     await sleep(600);
@@ -3682,7 +3780,7 @@ function jReady(){
   if(!nx){ setJState('done'); setStatus('6 面完成','按「下一步：拼圖解鎖」'); return; }
   if(nx!=='F' && S.jf.F){ setJState('turn'); showTurn(nx); return; }
   setJState('ready'); jShowScanCube(); R3.root.quaternion.copy(VIEW_Q().multiply(holdQ(nx)));
-  setStatus('準備拍「'+J_NAMES[nx]+'」面', nx==='F' ? '任選一面當正面、頂部朝上，對準後按「開始拍照」' : '對準後按「開始拍照」');
+  setStatus((S.redo===nx?'重拍':'準備拍')+'「'+J_NAMES[nx]+'」面', nx==='F' ? (S.redo==='F' ? '把當初的第 1 面（正面）對著鏡頭、頂部朝上，再按「開始拍照」' : '任選一面當正面、頂部朝上，對準後按「開始拍照」') : '對準後按「開始拍照」');
   setHoldTag(nx==='F' ? '★ 任選一面當正面，頂部朝上；之後都以它為準' : '第 '+(J_ORDER.indexOf(nx)+1)+' / 6 面：★ 這面對著鏡頭');
 }
 function jStartFace(){
@@ -3739,6 +3837,7 @@ $('btnRvOk').onclick=async()=>{
   if(P.live) (S.doneLive=S.doneLive||{})[P.f]=P.live; S.turnSeen=0;
   jShowScanCube(); jRenderChips(); jRenderRemain(); jUpdateProgress();
   const nx=jNext();
+  if(!nx && S.redo){ S.redo=null; setJState('done'); R3.root.quaternion.copy(VIEW_Q()); doJigsaw(); return; }
   if(!nx){ setJState('done'); setStatus('6 面完成','按「下一步：拼圖解鎖」'); R3.root.quaternion.copy(VIEW_Q()); toast('6 面都完成了，按「下一步：拼圖解鎖」',2600); return; }
   setJState('turn'); jShowScanCube(); await showTurn(nx);
 };
@@ -3845,7 +3944,7 @@ self.onmessage = function(e){
     const t0=Date.now(); const r=CubeEngine.jigsaw(cells, d.opts); const t1=Date.now();
     let sol=null;
     if(r.valid){ if(d.centers){ sol=CubeEngine.solve(r.state, min2phase, {timeMs:1500}); } else { const s=min2phase.solve(CubeEngine.toFacelets(r.state)); const mv=CubeEngine.parseAlg(s); sol={moves:mv, base:mv.length, fix:0, verified:CubeEngine.isSolved(CubeEngine.applyAlg(CubeEngine.cloneState(r.state),s),false)}; } }
-    self.postMessage({ok:true, state:r.state, homeImgCap:r.homeImgCap, valid:r.valid, score:r.score, faceRot:r.faceRot, sol, ms:[t1-t0, Date.now()-t1]});
+    self.postMessage({ok:true, state:r.state, homeImgCap:r.homeImgCap, valid:r.valid, score:r.score, faceRot:r.faceRot, noAlt:!!r.noAlt, sol, ms:[t1-t0, Date.now()-t1]});
   }catch(err){ self.postMessage({ok:false, error:String(err&&err.stack||err)}); }
 };`;
     WORKER=new Worker(URL.createObjectURL(new Blob([src],{type:'application/javascript'})));
@@ -3856,7 +3955,7 @@ function runJigsaw(payload){
   return new Promise((res)=>{
     const w=getWorker();
     if(!w){ // main-thread fallback
-      setTimeout(()=>{ try{ const r=E.jigsaw(payload.cells.map(c=>({S:c.S,data:new Float32Array(c.data)})), payload.opts); let sol=null; if(r.valid) sol=E.solve(r.state, window.min2phase, {timeMs:1500}); res({ok:true,state:r.state,homeImgCap:r.homeImgCap,valid:r.valid,score:r.score,faceRot:r.faceRot,sol}); }catch(err){ res({ok:false,error:String(err)}); } },30);
+      setTimeout(()=>{ try{ const r=E.jigsaw(payload.cells.map(c=>({S:c.S,data:new Float32Array(c.data)})), payload.opts); let sol=null; if(r.valid) sol=E.solve(r.state, window.min2phase, {timeMs:1500}); res({ok:true,state:r.state,homeImgCap:r.homeImgCap,valid:r.valid,score:r.score,faceRot:r.faceRot,noAlt:!!r.noAlt,sol}); }catch(err){ res({ok:false,error:String(err)}); } },30);
       return;
     }
     w.onmessage=e=>res(e.data); w.onerror=e=>res({ok:false,error:e.message||'worker error'});
@@ -3869,14 +3968,23 @@ function jCells(){
   for(const f of F){ const fc=S.jf[f].face; const d=fc.getContext('2d').getImageData(0,0,FACE_PX,FACE_PX).data; cells.push(...E.cellsFromBoxes(d,FACE_PX,FACE_PX,boxes,48)); }
   return cells;
 }
-async function doJigsaw(reopts){
+async function doJigsaw(reopts, label){
   if(jCount()<6) return;
-  busy(true,'自動拼圖中…（約 5～20 秒）'); const t0=Date.now(); const tick=setInterval(()=>{ $('busyText').textContent='自動拼圖中… '+Math.round((Date.now()-t0)/1000)+' 秒'; },500);
+  const lab = label || (reopts ? '換一個拼法中…' : '自動拼圖中…（約 5～20 秒）');
+  busy(true, lab); const t0=Date.now(); const tick=setInterval(()=>{ $('busyText').textContent=lab.replace(/（.*）/,'')+' '+Math.round((Date.now()-t0)/1000)+' 秒'; },500);
   const cells=jCells();
   const res=await runJigsaw({ cells: cells.map(c=>({S:c.S,data:Array.from(c.data)})), opts: reopts || { rotSearch:[0,3], timeMs:2400 }, centers: $('optCenters').checked });
   clearInterval(tick); busy(false);
   if(!res.ok){ console.error(res.error); toast('拼圖失敗：'+res.error.slice(0,80), 4000); return; }
-  S.jres=res; if(!reopts) S.pvMarks={};
+  if(!reopts){ S.alts=[res]; S.altIdx=0; S.pvLock={}; }
+  else {
+    if(res.noAlt){ toast('找不到其他合理的拼法了。可以多勾幾格對的，或重拍不清楚的那一面。', 4200); S.altIdx=S.alts.length-1; useAlt(S.altIdx); return; }
+    S.alts.push(res); S.altIdx=S.alts.length-1;
+  }
+  useAlt(S.altIdx);
+}
+function useAlt(i){
+  const res=S.alts[i]; S.jres=res;
   // assembled picture cells: home facelet -> captured cell (rotated)
   S.refCells = res.homeImgCap.map(id=>{ const sf=id>>2, rot=id&3; return cellCanvas(S.jf[F[Math.floor(sf/9)]].face, sf%9, rot); });
   showPreview();
@@ -3884,20 +3992,44 @@ async function doJigsaw(reopts){
 function showPreview(){
   S.mode='preview'; stopCamera(); $('scanArea').hidden=true; $('scanArea').style.display='none'; $('preview').hidden=false; $('preview').style.display='flex';
   const el=$('pvPics'); el.innerHTML='';
-  S.pvMarks = S.pvMarks || {}; S.centreFix = {}; S.forceCq=[null,null,null,null,null,null];
+  S.pvLock = S.pvLock || {}; S.forceCq=[null,null,null,null,null,null];
+  const cap=S.jres.homeImgCap;
   J_ORDER.forEach(f=>{ const fi=F.indexOf(f); const c=canvasOf(FACE_PX,FACE_PX), x=c.getContext('2d'); for(let p=0;p<9;p++) x.drawImage(S.refCells[fi*9+p],(p%3)*CELL,Math.floor(p/3)*CELL);
-    const fig=document.createElement('figure'); fig.appendChild(c); fig.setAttribute('role','button'); fig.setAttribute('aria-pressed', S.pvMarks[f]?'true':'false'); fig.setAttribute('aria-label',J_NAMES[f]+'面：點一下標記為拼對');
-    if(S.pvMarks[f]) fig.classList.add('ok');
-    const okb=document.createElement('span'); okb.className='okb'; okb.textContent=S.pvMarks[f]?'✓ 對':'標記'; fig.appendChild(okb);
-    const rb=document.createElement('button'); rb.className='rotc'; rb.textContent='↻'; rb.setAttribute('aria-label',J_NAMES[f]+'面的中間格轉 90 度'); rb.onclick=ev=>{ ev.stopPropagation(); pvRotateCentre(fi, c); }; fig.appendChild(rb);
-    fig.onclick=()=>{ S.pvMarks[f]=!S.pvMarks[f]; fig.classList.toggle('ok', !!S.pvMarks[f]); okb.textContent=S.pvMarks[f]?'✓ 對':'標記'; fig.setAttribute('aria-pressed', S.pvMarks[f]?'true':'false'); updateFixBtn(); };
-    const cap=document.createElement('figcaption'); cap.textContent=J_NAMES[f]+'面'; fig.appendChild(cap); el.appendChild(fig); });
-  updateFixBtn();
+    const fig=document.createElement('figure'); const wrap=document.createElement('div'); wrap.className='pvc'; wrap.appendChild(c);
+    const g9=document.createElement('div'); g9.className='g9'; const btns=[];
+    const isOn=h=>S.pvLock[h]!=null && S.pvLock[h]===S.jres.homeImgCap[h];
+    const okb=document.createElement('button'); okb.className='okb';
+    const refresh=()=>{ btns.forEach((bt,p)=>{ const on=isOn(fi*9+p); bt.classList.toggle('on',on); bt.setAttribute('aria-pressed',on?'true':'false'); }); const all=btns.every((_,p)=>isOn(fi*9+p)); fig.classList.toggle('ok',all); okb.textContent=all?'✓ 全對':'全對'; okb.setAttribute('aria-label',J_NAMES[f]+'面整面都對'); updateFixBtn(); };
+    for(let p=0;p<9;p++){ const bt=document.createElement('button'); bt.setAttribute('aria-label',J_NAMES[f]+'面第 '+(p+1)+' 格：點一下標記為拼對'); const h=fi*9+p;
+      bt.onclick=()=>{ if(isOn(h)) delete S.pvLock[h]; else S.pvLock[h]=S.jres.homeImgCap[h]; refresh(); }; g9.appendChild(bt); btns.push(bt); }
+    wrap.appendChild(g9); fig.appendChild(wrap);
+    okb.onclick=ev=>{ ev.stopPropagation(); const all=btns.every((_,p)=>isOn(fi*9+p)); for(let p=0;p<9;p++){ const h=fi*9+p; if(all) delete S.pvLock[h]; else S.pvLock[h]=S.jres.homeImgCap[h]; } refresh(); };
+    const fc=document.createElement('figcaption'); const nm=document.createElement('span'); nm.className='nm'; nm.textContent=J_NAMES[f]; fc.appendChild(nm); fc.appendChild(okb);
+    const rb=document.createElement('button'); rb.className='rotc2'; rb.textContent='↻ 中格'; rb.setAttribute('aria-label',J_NAMES[f]+'面的中間格轉 90 度'); rb.onclick=ev=>{ ev.stopPropagation(); pvRotateCentre(fi, c); refresh(); }; fc.appendChild(rb);
+    fig.appendChild(fc); el.appendChild(fig); refresh(); });
+  renderRedo();
   const res=S.jres; const rotNote = res.faceRot && (res.faceRot[0]||res.faceRot[3]) ? '（已自動修正上/下面拿的方向）' : '';
   $('pvNote').className='note '+(res.valid?'':'bad');
-  $('pvNote').textContent = res.valid ? ('程式拼出來的 6 張圖如下'+rotNote+'。圖案看起來對，就按「正確，開始解鎖」；上方 3D 也可以轉來看。') : '拼不出合理的結果。請檢查每一面的格線有沒有對準（點掃描頁的小圖可微調），或重拍。';
+  $('pvNote').textContent = res.valid ? ('程式拼出來的 6 張圖如下'+rotNote+'。圖案看起來對，就按「圖都對了，開始解鎖」。') : '拼不出合理的結果。請按「換一個拼法」，或點下方照片重拍不清楚的那一面。';
   $('btnPvOk').disabled = !res.valid || !res.sol;
+  $('btnAltPrev').disabled = !(S.altIdx>0);
+  $('altCnt').textContent = S.alts && S.alts.length>1 ? ('第 '+(S.altIdx+1)+' / '+S.alts.length+' 個') : '';
+  updateFixBtn();
   showStateCube(E.solvedState()); R3.view={...HOME_VIEW}; applyView(); $('btnHomeView').hidden=false; $('stageHint').textContent='這是還原後的樣子（左右拖可轉）'; $('stageBadge').textContent='預覽';
+}
+// the scanned photos, so a blurry / cut-off one can be retaken alone
+function renderRedo(){
+  const row=$('pvRedoRow'); row.innerHTML='';
+  J_ORDER.forEach(f=>{ const d=S.jf[f]; if(!d) return; const b=document.createElement('button'); const c=canvasOf(72,72); c.getContext('2d').drawImage(d.face,0,0,72,72); b.appendChild(c);
+    const l=document.createElement('span'); l.textContent=J_NAMES[f]; b.appendChild(l);
+    const weak = d.used!=null && d.used<3; if(weak){ const w=document.createElement('span'); w.className='warn'; w.textContent='!'; b.appendChild(w); }
+    b.setAttribute('aria-label','重拍'+J_NAMES[f]+'面'+(weak?'（這面照片張數少，可能不清楚）':''));
+    b.onclick=()=>redoFace(f); row.appendChild(b); });
+}
+function redoFace(f){
+  S.redo=f; delete S.jf[f]; S.alts=null; S.pvLock={};
+  toast('只重拍「'+J_NAMES[f]+'」面，拍好會自動重新拼圖', 2600);
+  backToScan();
 }
 $('btnPvOk').onclick=()=>{
   const res=S.jres; S.solution={ moves:res.sol.moves, verified:res.sol.verified, base:res.sol.base, fix:res.sol.fix };
@@ -3905,10 +4037,12 @@ $('btnPvOk').onclick=()=>{
   $('preview').hidden=true; $('preview').style.display='none'; enterSolve();
 };
 $('btnPvBack').onclick=()=>backToScan();
+function lockCount(){ const cap=S.jres&&S.jres.homeImgCap; if(!cap) return 0; return Object.keys(S.pvLock||{}).filter(h=>S.pvLock[h]===cap[h]).length; }
 function updateFixBtn(){
-  const n=J_ORDER.filter(f=>S.pvMarks&&S.pvMarks[f]).length, nc=Object.keys(S.centreFix||{}).length;
-  $('btnFix').disabled = n===0 && nc===0 || n===6;
-  $('btnFix').textContent = n ? '依標記重新拼圖（已標 '+n+' 面）' : (nc ? '依修正重新拼圖' : '依標記重新拼圖');
+  const n=lockCount();
+  $('btnFix').disabled=false;
+  const cap=S.jres&&S.jres.homeImgCap; const turned=cap && [0,1,2,3,4,5].some(fi=>S.pvLock[fi*9+4]!=null && S.pvLock[fi*9+4]!==cap[fi*9+4]);
+  $('btnFix').textContent = turned ? '依新的中格方向重新拼圖' : n ? '換一個拼法（保留 '+n+' 格）' : '換一個拼法';
 }
 function pvRotateCentre(fi, c){
   const cq=E.centerRots(S.jres.state); const cur = S.forceCq[fi]==null ? cq[fi] : S.forceCq[fi];
@@ -3917,16 +4051,28 @@ function pvRotateCentre(fi, c){
   const id=S.jres.homeImgCap[fi*9+4]; const sf=id>>2, rot0=id&3; const d=(S.forceCq[fi]-cq[fi]+4)%4;
   const cell=cellCanvas(S.jf[F[Math.floor(sf/9)]].face, sf%9, (rot0 - d + 8)%4);
   c.getContext('2d').drawImage(cell, CELL, CELL); S.refCells[fi*9+4]=cell;
-  S.centreFix[fi]=(sf*4)+((rot0 - d + 8)%4); updateFixBtn(); $('btnPvOk').disabled=true;
+  const nid=(sf*4)+((rot0 - d + 8)%4);
+  // a turned centre is locked as the customer set it (the other cells must be re-assembled around it)
+  if(d===0){ delete S.pvLock[fi*9+4]; } else S.pvLock[fi*9+4]=nid;
+  $('btnPvOk').disabled = d!==0 || !S.jres.valid || !S.jres.sol;
 }
 $('btnFix').onclick=()=>{
-  // lock every sticker of the faces the customer marked as right (as captured image ids), plus centre fixes
-  const lock={}; const marked=J_ORDER.filter(f=>S.pvMarks[f]).map(f=>F.indexOf(f));
-  for(const fi of marked) for(let p=0;p<9;p++) lock[fi*9+p]=S.jres.homeImgCap[fi*9+p];
-  for(const fi in (S.centreFix||{})) lock[fi*9+4]=S.centreFix[fi];
-  const free=[0,1,2,3,4,5].filter(fi=>!marked.includes(fi));
-  doJigsaw({ lockCap:lock, faceRot:S.jres.faceRot, rotSearch:[], rotGreedy:free, timeMs:2400 });
+  // keep every cell the customer ticked (as captured image ids) + centre turns, never show an assembly seen before
+  const lock={}; for(const h in S.pvLock) lock[h]=S.pvLock[h];
+  const avoid=(S.alts||[]).map(r=>r.homeImgCap);
+  // a centre turn alone: just re-assemble around it (no need to avoid the old one)
+  const centreOnly = Object.keys(lock).some(h=>h%9===4 && lock[h]!==S.jres.homeImgCap[h]);
+  const usedFaces=new Set(Object.values(lock).map(id=>Math.floor((id>>2)/9)));
+  const free=[0,3].filter(fi=>!usedFaces.has(fi));
+  if(!Object.keys(lock).length){
+    // nothing ticked = probably all wrong: re-check which way EVERY face was held (front face is the reference)
+    const skip=[...new Set((S.alts||[]).map(r=>r.faceRot.join('')))];
+    doJigsaw({ rotSearch:[0,1,3,4,5], rotBeam:120, skipRot:skip, avoid, timeMs:2400 }, '重新判斷每一面拿的方向…（約 15～30 秒）');
+    return;
+  }
+  doJigsaw({ lockCap:lock, avoid: centreOnly? [] : avoid, faceRot:S.jres.faceRot, rotSearch:[0,1,3,4,5], rotBeam:120, timeMs:2400 }, '依你勾的格子重新拼圖…（約 10～30 秒）');
 };
+$('btnAltPrev').onclick=()=>{ if(S.altIdx>0){ S.altIdx--; useAlt(S.altIdx); } };
 $('btnDump').onclick=()=>{
   // one image with the 6 scanned faces (as captured) for support / diagnosis
   const c=canvasOf(FACE_PX*3+40, FACE_PX*2+30), x=c.getContext('2d'); x.fillStyle='#111'; x.fillRect(0,0,c.width,c.height);
