@@ -3189,7 +3189,10 @@ async function loadCalibration(){
   let cal=null;
   const raw = store.get('pc_calib_v1'); if(raw){ try{ cal=JSON.parse(raw); }catch(e){} }
   const code = new URLSearchParams(location.search).get('d');
-  if(code){ try{ const r=await fetch('designs/'+encodeURIComponent(code)+'.json',{cache:'no-store'}); if(r.ok){ const j=await r.json(); if(F.every(x=>j.faces&&j.faces[x])) cal={faces:j.faces, names:Object.assign({},DEFAULT_NAMES), name:j.name||code, code}; } else toast('找不到圖案代碼「'+code+'」，改用標準圖案', 3500); }catch(e){ console.warn(e); } }
+  if(code){ try{ const r=await fetch('library/cubes/'+encodeURIComponent(code.toUpperCase())+'.json?t='+Date.now(),{cache:'no-store'}); if(r.ok){ const cube=await r.json(); const faces={};
+      for(const f of F){ const v=cube.faces[f]; const im=await loadImg('library/images/'+v.img+'.jpg'); const c=canvasOf(FACE_PX,FACE_PX); c.getContext('2d').drawImage(im,0,0,FACE_PX,FACE_PX); faces[f]=rotCanvasCW(c, v.rot||0).toDataURL('image/jpeg',0.92); }
+      cal={faces, names:Object.assign({},DEFAULT_NAMES), name:cube.name||cube.code, code:cube.code}; } }catch(e){ console.warn('cube load', e); } }
+  if(code && !cal){ try{ const r=await fetch('designs/'+encodeURIComponent(code)+'.json',{cache:'no-store'}); if(r.ok){ const j=await r.json(); if(F.every(x=>j.faces&&j.faces[x])) cal={faces:j.faces, names:Object.assign({},DEFAULT_NAMES), name:j.name||code, code}; } else toast('找不到圖案代碼「'+code+'」，改用標準圖案', 3500); }catch(e){ console.warn(e); } }
   if(!cal) cal = { faces: DESIGN_DEFAULT.faces, names: Object.assign({},DEFAULT_NAMES), name: DESIGN_DEFAULT.name, builtin: true };
   await setCalibration(cal);
   // shared calibration (when hosted as a Claude artifact with a database)
