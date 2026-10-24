@@ -345,7 +345,7 @@ body.scanning .remain{min-height:0;font-size:12px;line-height:1.35}
   <div class="row"><button class="btn primary small" id="btnMakeDesign">用剛掃的 6 面建立圖案檔</button></div>
   <div class="row" style="margin-top:8px"><button class="btn small" id="btnExport">匯出圖案檔</button><button class="btn small" id="btnImport">匯入圖案檔</button><button class="btn small" id="btnUseDefault">改回標準圖案</button></div>
   <div class="row" style="margin-top:8px"><button class="btn small" id="btnSim">模擬掃描測試</button><button class="btn small" id="btnCalib" hidden>舊版校正</button></div>
-  <p class="muted" style="font-size:11px;opacity:.7">版本 2026-10-24c</p>
+  <p class="muted" style="font-size:11px;opacity:.7">版本 2026-10-24d</p>
   <div class="row" style="margin-top:12px"><button class="btn ghost" id="btnCloseSettings">關閉</button></div>
 </div></div>
 
@@ -1175,7 +1175,7 @@ async function jFinishFrames(frames){
   const f=jNext(); if(!f || !frames.length) return;
   setStatus('對準九宮格中…'); await sleep(10);
   // fine-align the 3x3 grid on every frame: grid lines into the dark gaps between stickers
-  if(T.refine!==false && !window.__noRefine) frames=frames.map(fr=>{ try{ const r=E.refineQuad(fr.reg.d, fr.reg.w, fr.reg.h, fr.quad); if(r.n>=6 && r.moved<0.08){ return Object.assign({}, fr, { quad:r.quad, face:E.warpQuad(fr.reg.d, fr.reg.w, fr.reg.h, r.quad, FACE_PX), refined:r.moved }); } }catch(e){ console.warn(e); } return fr; });
+  if(T.refine!==false && !window.__noRefine) frames=frames.map(fr=>{ try{ let q0=fr.quad; const g=E.regridQuad(fr.reg.d, fr.reg.w, fr.reg.h, q0); if(g.ok) q0=g.quad; const r=E.refineQuad(fr.reg.d, fr.reg.w, fr.reg.h, q0); if(g.ok && !(r.n>=6)) return Object.assign({}, fr, { quad:q0, face:E.warpQuad(fr.reg.d, fr.reg.w, fr.reg.h, q0, FACE_PX), regrid:true }); if(r.n>=6 && r.moved<0.08){ return Object.assign({}, fr, { quad:r.quad, face:E.warpQuad(fr.reg.d, fr.reg.w, fr.reg.h, r.quad, FACE_PX), refined:r.moved }); } }catch(e){ console.warn(e); } return fr; });
   // keep only the largest group of frames that agree with each other (medoid), then median-stack them
   if(frames.length>3){
     const fd=(A,B)=>{ let d=0; for(let i=0;i<A.length;i+=24) d+=Math.abs(A[i]-B[i])+Math.abs(A[i+1]-B[i+1])+Math.abs(A[i+2]-B[i+2]); return d; };

@@ -349,7 +349,7 @@ body.scanning .remain{min-height:0;font-size:12px;line-height:1.35}
   <div class="row"><button class="btn primary small" id="btnMakeDesign">用剛掃的 6 面建立圖案檔</button></div>
   <div class="row" style="margin-top:8px"><button class="btn small" id="btnExport">匯出圖案檔</button><button class="btn small" id="btnImport">匯入圖案檔</button><button class="btn small" id="btnUseDefault">改回標準圖案</button></div>
   <div class="row" style="margin-top:8px"><button class="btn small" id="btnSim">模擬掃描測試</button><button class="btn small" id="btnCalib" hidden>舊版校正</button></div>
-  <p class="muted" style="font-size:11px;opacity:.7">版本 2026-10-24c</p>
+  <p class="muted" style="font-size:11px;opacity:.7">版本 2026-10-24d</p>
   <div class="row" style="margin-top:12px"><button class="btn ghost" id="btnCloseSettings">關閉</button></div>
 </div></div>
 
@@ -3122,6 +3122,59 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api; else 
     return { quad: q, n: nMeas, moved };
   }
   E.refineQuad = refineQuad;
+  // coarse re-grid: look in a 1.35x larger area for two evenly spaced vertical seams and two horizontal
+  // seams (the dark gaps between stickers) and rebuild the grid from them. Fixes locks that are off by
+  // 10-25% (picked up background / the cube body edge), which refineQuad's small window cannot.
+  function regridQuad(rgba, W, H, quad, opts) {
+    opts = opts || {}; const N = 300, X = opts.expand || 1.35;
+    const cx = quad.reduce((a, p) => a + p[0], 0) / 4, cy = quad.reduce((a, p) => a + p[1], 0) / 4;
+    const big = quad.map(([x, y]) => [cx + (x - cx) * X, cy + (y - cy) * X]);
+    const img = warpQuad(rgba, W, H, big, N);
+    const L = new Float32Array(N * N); for (let i = 0; i < N * N; i++) L[i] = 0.299 * img[i * 4] + 0.587 * img[i * 4 + 1] + 0.114 * img[i * 4 + 2];
+    const dl = 4;
+    // valley strength of each column / row: neighbours on both sides brighter than the line (median over the line)
+    const prof = (vert, dd) => { const v = new Float32Array(N), buf = [];
+      for (let k = dd; k < N - dd; k++) { buf.length = 0;
+        for (let t = Math.round(N * 0.12); t < N * 0.88; t += 2) { const c = vert ? L[t * N + k] : L[k * N + t], a = vert ? L[t * N + k - dd] : L[(k - dd) * N + t], b = vert ? L[t * N + k + dd] : L[(k + dd) * N + t]; buf.push(Math.min(a, b) - c); }
+        buf.sort((x, y) => x - y); v[k] = Math.max(v[k], Math.max(0, buf[Math.floor(buf.length * 0.5)]) + 0.5 * Math.max(0, buf[Math.floor(buf.length * 0.75)])); }
+      const sm = new Float32Array(N); for (let k = 1; k < N - 1; k++) sm[k] = Math.max(v[k - 1], v[k], v[k + 1]); return sm; };
+    const pick = (V) => {
+      const n0 = N / X; let best = null;
+      for (let d = Math.round(n0 * 0.27); d <= Math.round(n0 * 0.42); d++) for (let a = d; a + 2 * d <= N; a++) {
+        const b = a + d; const s = V[a] + V[b] - 0.15 * Math.abs((a - d + b + d) / 2 - N / 2) / N * 10; // mild pull to centre
+        if (!best || s > best.s) best = { s, a, b, d };
+      }
+      return best;
+    };
+    const med = V => { const a = Array.from(V).sort((x, y) => x - y); return a[Math.floor(a.length / 2)] + 1; };
+    const bestAxis = vert => { let r = null; for (const dd of [dl]) { const V = prof(vert, dd), p = pick(V); if (!p) continue; const z = p.s / med(V); if (!r || z > r.z) r = { V, p, z }; } return r; };
+    const ax = bestAxis(true), ay = bestAxis(false); if (!ax || !ay) return { quad, ok: false };
+    const cv = ax.V, rv = ay.V, pc = ax.p, pr = ay.p;
+    if (!pc || !pr) return { quad, ok: false };
+    // evidence must beat what the current grid gives
+    const n0 = N / X, o = (N - n0) / 2;
+    const cur = (V) => Math.max(V[Math.round(o + n0 / 3)], V[Math.round(o + n0 / 3) - 1], V[Math.round(o + n0 / 3) + 1]) + Math.max(V[Math.round(o + 2 * n0 / 3)], V[Math.round(o + 2 * n0 / 3) - 1], V[Math.round(o + 2 * n0 / 3) + 1]);
+    const gain = (pc.s - cur(cv)) + (pr.s - cur(rv));
+    const ratio = Math.min(pc.d, pr.d) / Math.max(pc.d, pr.d);
+    const M = (u, v) => { const [x0, y0] = big[0], [x1, y1] = big[1], [x2, y2] = big[2], [x3, y3] = big[3];
+      const dx1 = x1 - x2, dx2 = x3 - x2, dx3 = x0 - x1 + x2 - x3, dy1 = y1 - y2, dy2 = y3 - y2, dy3 = y0 - y1 + y2 - y3; let A, B, C, D, Ee, Ff, G, Hh;
+      if (Math.abs(dx3) < 1e-9 && Math.abs(dy3) < 1e-9) { A = x1 - x0; B = x2 - x1; C = x0; D = y1 - y0; Ee = y2 - y1; Ff = y0; G = 0; Hh = 0; }
+      else { const den = dx1 * dy2 - dx2 * dy1; G = (dx3 * dy2 - dx2 * dy3) / den; Hh = (dx1 * dy3 - dx3 * dy1) / den; A = x1 - x0 + G * x1; B = x3 - x0 + Hh * x3; C = x0; D = y1 - y0 + G * y1; Ee = y3 - y0 + Hh * y3; Ff = y0; }
+      const w = G * u + Hh * v + 1; return [(A * u + B * v + C) / w, (D * u + Ee * v + Ff) / w]; };
+    const u0 = (pc.a - pc.d) / N, u1 = (pc.b + pc.d) / N, v0 = (pr.a - pr.d) / N, v1 = (pr.b + pr.d) / N;
+    const q = [M(u0, v0), M(u1, v0), M(u1, v1), M(u0, v1)];
+    const ok = ratio > 0.85 && gain > (opts.minGain == null ? 3 : opts.minGain) && pc.s > 6 && pr.s > 6;
+    return { quad: ok ? q : quad, ok, gain, ratio, cols: [pc.a, pc.b, pc.d], rows: [pr.a, pr.b, pr.d] };
+  }
+  E.regridQuad = function (rgba, W, H, quad, opts) {
+    const a = regridQuad(rgba, W, H, quad, Object.assign({}, opts, { expand: 1.35 }));
+    if (!a.ok) return a;
+    const b = regridQuad(rgba, W, H, quad, Object.assign({}, opts, { expand: 1.22 }));
+    const side = Math.hypot(a.quad[1][0] - a.quad[0][0], a.quad[1][1] - a.quad[0][1]);
+    const diff = a.quad.reduce((s, p, i) => s + Math.hypot(p[0] - b.quad[i][0], p[1] - b.quad[i][1]), 0) / 4 / side;
+    if (!b.ok || diff > 0.025) return Object.assign({}, a, { quad, ok: false, agree: diff });
+    return Object.assign({}, a, { agree: diff });
+  };
   E.lockQuad = lockQuad; E.warpQuad = warpQuad; E.medianStack = medianStack; E.gradients = gradients;
 })();
 </script>
@@ -3936,7 +3989,7 @@ async function jFinishFrames(frames){
   const f=jNext(); if(!f || !frames.length) return;
   setStatus('對準九宮格中…'); await sleep(10);
   // fine-align the 3x3 grid on every frame: grid lines into the dark gaps between stickers
-  if(T.refine!==false && !window.__noRefine) frames=frames.map(fr=>{ try{ const r=E.refineQuad(fr.reg.d, fr.reg.w, fr.reg.h, fr.quad); if(r.n>=6 && r.moved<0.08){ return Object.assign({}, fr, { quad:r.quad, face:E.warpQuad(fr.reg.d, fr.reg.w, fr.reg.h, r.quad, FACE_PX), refined:r.moved }); } }catch(e){ console.warn(e); } return fr; });
+  if(T.refine!==false && !window.__noRefine) frames=frames.map(fr=>{ try{ let q0=fr.quad; const g=E.regridQuad(fr.reg.d, fr.reg.w, fr.reg.h, q0); if(g.ok) q0=g.quad; const r=E.refineQuad(fr.reg.d, fr.reg.w, fr.reg.h, q0); if(g.ok && !(r.n>=6)) return Object.assign({}, fr, { quad:q0, face:E.warpQuad(fr.reg.d, fr.reg.w, fr.reg.h, q0, FACE_PX), regrid:true }); if(r.n>=6 && r.moved<0.08){ return Object.assign({}, fr, { quad:r.quad, face:E.warpQuad(fr.reg.d, fr.reg.w, fr.reg.h, r.quad, FACE_PX), refined:r.moved }); } }catch(e){ console.warn(e); } return fr; });
   // keep only the largest group of frames that agree with each other (medoid), then median-stack them
   if(frames.length>3){
     const fd=(A,B)=>{ let d=0; for(let i=0;i<A.length;i+=24) d+=Math.abs(A[i]-B[i])+Math.abs(A[i+1]-B[i+1])+Math.abs(A[i+2]-B[i+2]); return d; };
