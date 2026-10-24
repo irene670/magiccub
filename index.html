@@ -150,6 +150,10 @@ header h1 small{font-family:var(--f-body);font-weight:500;font-size:12px;color:v
 .lesson .num{font-family:var(--f-mono);white-space:nowrap}
 .movecard .desc .eff{display:block;font-size:13px;color:var(--paper);margin-top:3px}
 .movecard .desc .eff.plus{color:var(--ok)}
+.choice{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:50;display:grid;place-items:center;padding:16px}
+.choice>div{background:var(--wall);border:1px solid var(--line);border-radius:16px;padding:18px;max-width:420px;width:100%}
+.choice h3{margin:0 0 6px;font-size:18px}.choice p{margin:0 0 14px;color:var(--paper);line-height:1.55}
+.choice .row{display:flex;flex-direction:column;gap:8px}.choice .btn{width:100%}
 .pvActions{position:sticky;bottom:0;background:var(--ink);padding-block:8px 2px;margin-top:auto;z-index:2}
 .pics canvas{width:100%;aspect-ratio:1;border-radius:8px;border:1px solid var(--line);display:block}
 .pics figcaption{font-size:11px;color:var(--muted);text-align:center}
@@ -345,6 +349,7 @@ body.scanning .remain{min-height:0;font-size:12px;line-height:1.35}
   <div class="row"><button class="btn primary small" id="btnMakeDesign">用剛掃的 6 面建立圖案檔</button></div>
   <div class="row" style="margin-top:8px"><button class="btn small" id="btnExport">匯出圖案檔</button><button class="btn small" id="btnImport">匯入圖案檔</button><button class="btn small" id="btnUseDefault">改回標準圖案</button></div>
   <div class="row" style="margin-top:8px"><button class="btn small" id="btnSim">模擬掃描測試</button><button class="btn small" id="btnCalib" hidden>舊版校正</button></div>
+  <p class="muted" style="font-size:11px;opacity:.7">版本 2026-10-24c</p>
   <div class="row" style="margin-top:12px"><button class="btn ghost" id="btnCloseSettings">關閉</button></div>
 </div></div>
 
@@ -2237,7 +2242,7 @@ function libraryHold(refPats, caps, opts) {
   const ref0 = buildReference(refPats);
   const rec0 = reconstruct(ref0, caps);
   const g = CUBE_ROTS.find(G => rec0.faceOfCap.every((rf, i) => eq(G.apply(NRM[FACES[rf]]), NRM[FACES[i]])));
-  if (!g) return { rec: rec0, ok: false, reason: 'centres' };
+  if (!g) return { rec: rec0, rec0, ok: false, reason: rec0.valid ? 'centres' : 'invalid' };
   const m = bySlot(solvedState().map(x => ({ id: x.id, pos: g.apply(x.pos), n: g.apply(x.n), up: g.apply(x.up) })));
   const map = [], pats = [];
   for (let k = 0; k < 54; k++) { const q = qOf(FACES[Math.floor(k / 9)], m[k].up); map.push([m[k].id, q]); let p = refPats[m[k].id]; for (let i = 0; i < q; i++) p = rotPatchCW(p); pats.push(p); }
@@ -3531,7 +3536,14 @@ async function doDesign(){
     const caps=F.map(f=>({patches:S.jf[f].patches}));
     r=E.libraryHold(refPats, caps);
   }catch(e){ console.error(e); }
-  if(!r || !r.ok){ busy(false); toast('跟目前的圖案檔對不起來，改用自動拼圖', 3500); return doJigsaw(); }
+  if(!r || !r.ok){ busy(false);
+    // tell the customer what to do instead of silently switching method
+    let msg='辨識不出來。', worst=null;
+    if(r && r.rec0 && r.rec0.valid && r.reason==='centres') msg='6 面都認得出來，但掃描時的拿法順序不對（例如沒有照指示轉、或上下面拿反）。請按「全部重掃」，照動畫一步一步轉。';
+    else if(r && r.rec0){ const per=[0,0,0,0,0,0]; r.rec0.perSticker.forEach((v,i)=>per[Math.floor(i/9)]+=v); const sf=per.indexOf(Math.max(...per)); worst=F[r.rec0.capOfFace[sf]]; msg='「'+J_NAMES[worst]+'」面可能拍得不清楚或格線沒對準，請重拍這一面。也可能這顆方塊跟目前的圖案檔不是同一款。'; }
+    const ch=await choose('辨識失敗', msg, [ worst?{label:'重拍「'+J_NAMES[worst]+'」面', v:'redo', primary:true}:null, {label:'全部重掃', v:'all', primary:!worst}, {label:'改用自動拼圖', v:'jig'} ].filter(Boolean));
+    if(ch==='redo') redoFace(worst); else if(ch==='all'){ S.jf={}; S.redo=null; backToScan(); } else if(ch==='jig') doJigsaw();
+    return; }
   busy(true,'計算解法…'); await sleep(30);
   let sol=null;
   try{ const st=E.cloneState(r.rec.state); sol = $('optCenters').checked ? E.solve(st, window.min2phase, {timeMs:1800}) : (()=>{ const s=window.min2phase.solve(E.toFacelets(st)); const mv=E.parseAlg(s); return {moves:mv, verified:E.isSolved(E.applyAlg(E.cloneState(st),s),false), base:mv.length, fix:0}; })(); }catch(e){ console.error(e); }
@@ -3900,6 +3912,26 @@ function lockFrame(reg, steps, box, range){
 }
 function rgbaToCanvas(d,w,h){ const c=canvasOf(w,h); c.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(d),w,h),0,0); return c; }
 // frames: [{reg, quad, face(rgba 300x300), sh, cm?}] -> median-stacked face, then review
+function grayOf(face, k){ const n=FACE_PX/k|0, g=new Float32Array(n*n); for(let y=0;y<n;y++) for(let x=0;x<n;x++){ let sm=0; for(let yy=0;yy<k;yy++) for(let xx=0;xx<k;xx++){ const i=((y*k+yy)*FACE_PX+x*k+xx)*4; sm+=face[i]*0.3+face[i+1]*0.59+face[i+2]*0.11; } g[y*n+x]=sm/(k*k); } return {g,n}; }
+function shiftErr(A,B,n,dx,dy){ const m=Math.round(n*0.12); let s=0,c=0; for(let y=m;y<n-m;y++) for(let x=m;x<n-m;x++){ s+=Math.abs(A[y*n+x]-B[(y+dy)*n+x+dx]); c++; } return s/c; }
+function bestShift(A,B,n,R,cx,cy){ let b={dx:cx||0,dy:cy||0,e:Infinity}; for(let dy=(cy||0)-R;dy<=(cy||0)+R;dy++) for(let dx=(cx||0)-R;dx<=(cx||0)+R;dx++){ const e=shiftErr(A,B,n,dx,dy); if(e<b.e) b={dx,dy,e}; } return b; }
+function shiftFace(face,dx,dy){ const o=new Uint8ClampedArray(face.length); for(let y=0;y<FACE_PX;y++){ const sy=Math.min(FACE_PX-1,Math.max(0,y+dy)); for(let x=0;x<FACE_PX;x++){ const sx=Math.min(FACE_PX-1,Math.max(0,x+dx)); const i=(y*FACE_PX+x)*4, j=(sy*FACE_PX+sx)*4; o[i]=face[j]; o[i+1]=face[j+1]; o[i+2]=face[j+2]; o[i+3]=255; } } return o; }
+function alignFrames(frames){
+  frames=frames.map(fr=>Object.assign({},fr,{sh2:E.sharpness({d:fr.face,w:FACE_PX,h:FACE_PX})}));
+  const ref=frames.reduce((a,b)=>b.sh2>a.sh2?b:a);
+  if(frames.length<2) return {frames, ref};
+  const K=3, R=grayOf(ref.face,K), RF=grayOf(ref.face,2);
+  const out=[ref], errs=[];
+  for(const fr of frames){ if(fr===ref) continue;
+    const G=grayOf(fr.face,K); const c=bestShift(R.g,G.g,R.n,6);
+    if(Math.abs(c.dx)>4||Math.abs(c.dy)>4) continue;            // more than ~4% off: a different lock, drop it
+    const GF=grayOf(fr.face,2); const f2=bestShift(RF.g,GF.g,RF.n,2,Math.round(c.dx*K/2),Math.round(c.dy*K/2));
+    errs.push(f2.e); out.push(Object.assign({},fr,{face:shiftFace(fr.face,f2.dx*2,f2.dy*2),alignErr:f2.e}));
+  }
+  // drop frames that still disagree a lot after alignment (motion blur, finger, different face)
+  if(errs.length>=2){ const med=errs.slice().sort((a,b)=>a-b)[Math.floor(errs.length/2)]; const keep=out.filter(x=>x===ref||x.alignErr<=med*1.5+2); return {frames:keep.length>=3?keep:[ref], ref}; }
+  return {frames: out.length>=3?out:[ref], ref};
+}
 async function jFinishFrames(frames){
   const f=jNext(); if(!f || !frames.length) return;
   setStatus('對準九宮格中…'); await sleep(10);
@@ -3913,8 +3945,11 @@ async function jFinishFrames(frames){
     const dm=D[mi].filter((_,j)=>j!==mi).sort((x,y)=>x-y); const lim=Math.min(dm[Math.floor(dm.length/2)]*1.25, dm[0]*1.8)+1;
     const keep=frames.filter((_,j)=>j===mi || D[mi][j]<=lim); if(keep.length>=2) frames=keep;
   }
-  let stacked = frames.length>2 ? E.medianStack(frames.map(x=>x.face), FACE_PX) : frames[0].face;
-  const best = frames.reduce((a,b)=> b.sh>a.sh?b:a);
+  // align every frame to the sharpest one before stacking (a frame locked a few % off makes ghosts);
+  // frames that can't be aligned are dropped; if too few remain, use the sharpest frame alone
+  const al=alignFrames(frames); frames=al.frames;
+  let stacked = frames.length>2 ? E.medianStack(frames.map(x=>x.face), FACE_PX) : al.ref.face;
+  const best = al.ref;
   const cms = frames.map(x=>x.cm).filter(Boolean);
   S.jpending={ f, src:rgbaToCanvas(best.reg.d,best.reg.w,best.reg.h), quad:best.quad.map(p=>p.slice()), face:rgbaToCanvas(stacked,FACE_PX,FACE_PX), used:frames.length, live: cms.length ? cms[Math.floor(cms.length/2)] : null };
   showReview();
@@ -3939,7 +3974,7 @@ $('btnRvOk').onclick=async()=>{
   if(P.live) (S.doneLive=S.doneLive||{})[P.f]=P.live; S.turnSeen=0;
   jShowScanCube(); jRenderChips(); jRenderRemain(); jUpdateProgress();
   const nx=jNext();
-  if(!nx && S.redo){ S.redo=null; setJState('done'); R3.root.quaternion.copy(VIEW_Q()); doJigsaw(); return; }
+  if(!nx && S.redo){ S.redo=null; setJState('done'); R3.root.quaternion.copy(VIEW_Q()); $('btnNext').onclick(); return; }
   if(!nx){ setJState('done'); setStatus('6 面完成','按「下一步：拼圖解鎖」'); R3.root.quaternion.copy(VIEW_Q()); toast('6 面都完成了，按「下一步：拼圖解鎖」',2600); return; }
   setJState('turn'); jShowScanCube(); await showTurn(nx);
 };
@@ -4128,9 +4163,15 @@ function renderRedo(){
     b.setAttribute('aria-label','重拍'+J_NAMES[f]+'面'+(weak?'（這面照片張數少，可能不清楚）':''));
     b.onclick=()=>redoFace(f); row.appendChild(b); });
 }
+function choose(title, text, opts){
+  return new Promise(res=>{ const o=document.createElement('div'); o.className='choice';
+    const card=document.createElement('div'); const h=document.createElement('h3'); h.textContent=title; const p=document.createElement('p'); p.textContent=text; card.append(h,p);
+    const row=document.createElement('div'); row.className='row'; for(const op of opts){ const b=document.createElement('button'); b.className='btn'+(op.primary?' primary':''); b.textContent=op.label; b.onclick=()=>{ o.remove(); res(op.v); }; row.appendChild(b); }
+    card.appendChild(row); o.appendChild(card); document.body.appendChild(o); });
+}
 function redoFace(f){
   S.redo=f; delete S.jf[f]; S.alts=null; S.pvLock={};
-  toast('只重拍「'+J_NAMES[f]+'」面，拍好會自動重新拼圖', 2600);
+  toast('只重拍「'+J_NAMES[f]+'」面，拍好會自動重新辨識', 2600);
   backToScan();
 }
 $('btnPvOk').onclick=()=>{

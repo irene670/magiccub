@@ -469,7 +469,7 @@ function libraryHold(refPats, caps, opts) {
   const ref0 = buildReference(refPats);
   const rec0 = reconstruct(ref0, caps);
   const g = CUBE_ROTS.find(G => rec0.faceOfCap.every((rf, i) => eq(G.apply(NRM[FACES[rf]]), NRM[FACES[i]])));
-  if (!g) return { rec: rec0, ok: false, reason: 'centres' };
+  if (!g) return { rec: rec0, rec0, ok: false, reason: rec0.valid ? 'centres' : 'invalid' };
   const m = bySlot(solvedState().map(x => ({ id: x.id, pos: g.apply(x.pos), n: g.apply(x.n), up: g.apply(x.up) })));
   const map = [], pats = [];
   for (let k = 0; k < 54; k++) { const q = qOf(FACES[Math.floor(k / 9)], m[k].up); map.push([m[k].id, q]); let p = refPats[m[k].id]; for (let i = 0; i < q; i++) p = rotPatchCW(p); pats.push(p); }
