@@ -1393,6 +1393,40 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api; else 
     const ok = ratio > 0.85 && gain > (opts.minGain == null ? 3 : opts.minGain) && pc.s > 6 && pr.s > 6;
     return { quad: ok ? q : quad, ok, gain, ratio, cols: [pc.a, pc.b, pc.d], rows: [pr.a, pr.b, pr.d] };
   }
+  // fit the grid to a KNOWN design: move the quad so each of the 9 cells looks as much as possible like
+  // one of the 54 design stickers (any rotation). Independent of how visible the seams are.
+  function designFitQuad(rgba, W, H, quad, ref, opts) {
+    opts = opts || {}; const N = opts.N || 120;
+    const cost = q => {
+      const face = warpQuad(rgba, W, H, q, N); const pats = E.extractPatches(face, N, N, 0, 0, N);
+      let s = 0;
+      for (const p of pats) { const d = E.descriptor(p, null, true); let b = 1e18; for (let j = 0; j < 54; j++) for (let k = 0; k < 4; k++) { const v = E.dist2(d, ref.ldesc[j][k]); if (v < b) b = v; } s += b; }
+      return s / (9 * ref.lscale);
+    };
+    const side = Math.hypot(quad[1][0] - quad[0][0], quad[1][1] - quad[0][1]);
+    const lim = side * (opts.range == null ? 0.25 : opts.range);
+    let q = quad.map(p => p.slice()), best = cost(q); const start = best; let evals = 1;
+    const tryQ = t => { if (t.some((p, i) => Math.abs(p[0] - quad[i][0]) > lim || Math.abs(p[1] - quad[i][1]) > lim)) return false; const v = cost(t); evals++; if (v < best - 1e-6) { best = v; q = t; return true; } return false; };
+    const ctr = () => [(q[0][0] + q[1][0] + q[2][0] + q[3][0]) / 4, (q[0][1] + q[1][1] + q[2][1] + q[3][1]) / 4];
+    // coarse sweep over shift x shift x scale (the lock can be 10-25% off), then local descent
+    if (opts.sweep !== false) {
+      const q0 = q.map(p => p.slice()), [cx0, cy0] = ctr(); const R = opts.sweepR || 0.15, St = opts.sweepStep || 0.03;
+      for (const f of [0.86, 0.93, 1, 1.07, 1.15]) for (let dy = -R; dy <= R + 1e-9; dy += St) for (let dx = -R; dx <= R + 1e-9; dx += St) {
+        tryQ(q0.map(([x, y]) => [cx0 + (x - cx0) * f + dx * side, cy0 + (y - cy0) * f + dy * side]));
+      }
+    }
+    for (const st of [0.02, 0.01, 0.005]) {
+      const step = side * st; let improved = true, it = 0;
+      while (improved && it++ < 8) { improved = false;
+        // whole-grid moves first (shift / scale), then single corners
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (tryQ(q.map(([x, y]) => [x + dx * step, y + dy * step]))) improved = true;
+        for (const sg of [1, -1]) { const [cx, cy] = ctr(); const f = 1 + sg * st; if (tryQ(q.map(([x, y]) => [cx + (x - cx) * f, cy + (y - cy) * f]))) improved = true; }
+        for (let c = 0; c < 4; c++) for (let ax = 0; ax < 2; ax++) for (const sg of [-1, 1]) { const t = q.map(p => p.slice()); t[c][ax] += sg * step; if (tryQ(t)) improved = true; }
+      }
+    }
+    return { quad: q, cost: best, start, gain: start - best, evals };
+  }
+  E.designFitQuad = designFitQuad;
   E.regridQuad = function (rgba, W, H, quad, opts) {
     const a = regridQuad(rgba, W, H, quad, Object.assign({}, opts, { expand: 1.35 }));
     if (!a.ok) return a;

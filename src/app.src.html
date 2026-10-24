@@ -345,7 +345,7 @@ body.scanning .remain{min-height:0;font-size:12px;line-height:1.35}
   <div class="row"><button class="btn primary small" id="btnMakeDesign">用剛掃的 6 面建立圖案檔</button></div>
   <div class="row" style="margin-top:8px"><button class="btn small" id="btnExport">匯出圖案檔</button><button class="btn small" id="btnImport">匯入圖案檔</button><button class="btn small" id="btnUseDefault">改回標準圖案</button></div>
   <div class="row" style="margin-top:8px"><button class="btn small" id="btnSim">模擬掃描測試</button><button class="btn small" id="btnCalib" hidden>舊版校正</button></div>
-  <p class="muted" style="font-size:11px;opacity:.7">版本 2026-10-24e</p>
+  <p class="muted" style="font-size:11px;opacity:.7">版本 2026-10-24f</p>
   <div class="row" style="margin-top:12px"><button class="btn ghost" id="btnCloseSettings">關閉</button></div>
 </div></div>
 
@@ -1157,9 +1157,9 @@ function grayOf(face, k){ const n=FACE_PX/k|0, g=new Float32Array(n*n); for(let 
 function shiftErr(A,B,n,dx,dy){ const m=Math.round(n*0.12); let s=0,c=0; for(let y=m;y<n-m;y++) for(let x=m;x<n-m;x++){ s+=Math.abs(A[y*n+x]-B[(y+dy)*n+x+dx]); c++; } return s/c; }
 function bestShift(A,B,n,R,cx,cy){ let b={dx:cx||0,dy:cy||0,e:Infinity}; for(let dy=(cy||0)-R;dy<=(cy||0)+R;dy++) for(let dx=(cx||0)-R;dx<=(cx||0)+R;dx++){ const e=shiftErr(A,B,n,dx,dy); if(e<b.e) b={dx,dy,e}; } return b; }
 function shiftFace(face,dx,dy){ const o=new Uint8ClampedArray(face.length); for(let y=0;y<FACE_PX;y++){ const sy=Math.min(FACE_PX-1,Math.max(0,y+dy)); for(let x=0;x<FACE_PX;x++){ const sx=Math.min(FACE_PX-1,Math.max(0,x+dx)); const i=(y*FACE_PX+x)*4, j=(sy*FACE_PX+sx)*4; o[i]=face[j]; o[i+1]=face[j+1]; o[i+2]=face[j+2]; o[i+3]=255; } } return o; }
-function alignFrames(frames){
-  frames=frames.map(fr=>Object.assign({},fr,{sh2:E.sharpness({d:fr.face,w:FACE_PX,h:FACE_PX})}));
-  const ref=frames.reduce((a,b)=>b.sh2>a.sh2?b:a);
+function alignFrames(frames, forced){
+  frames=frames.map(fr=>fr===forced?fr:Object.assign({},fr,{sh2:E.sharpness({d:fr.face,w:FACE_PX,h:FACE_PX})}));
+  const ref=forced||frames.reduce((a,b)=>b.sh2>a.sh2?b:a);
   if(frames.length<2) return {frames, ref};
   const K=3, R=grayOf(ref.face,K), RF=grayOf(ref.face,2);
   const out=[ref], errs=[];
@@ -1188,7 +1188,16 @@ async function jFinishFrames(frames){
   }
   // align every frame to the sharpest one before stacking (a frame locked a few % off makes ghosts);
   // frames that can't be aligned are dropped; if too few remain, use the sharpest frame alone
-  const al=alignFrames(frames); frames=al.frames;
+  // with a design file: fit the sharpest frame's grid to the known stickers, then align the rest to it
+  let forced=null;
+  if(S.recog==='design' && S.ref && T.designFit!==false){
+    setStatus('依圖案檔對準九宮格…'); await sleep(10);
+    try{ const sh=frames.map(fr=>E.sharpness({d:fr.face,w:FACE_PX,h:FACE_PX})); const i=sh.indexOf(Math.max(...sh)); const fr=frames[i];
+      const r=E.designFitQuad(fr.reg.d, fr.reg.w, fr.reg.h, fr.quad, S.ref);
+      if(r.gain>0){ forced=Object.assign({},fr,{quad:r.quad, face:E.warpQuad(fr.reg.d, fr.reg.w, fr.reg.h, r.quad, FACE_PX), sh2:sh[i], fit:r.gain}); frames=frames.map((x,j)=>j===i?forced:x); }
+    }catch(e){ console.warn('designFit', e); }
+  }
+  const al=alignFrames(frames, forced); frames=al.frames;
   let stacked = frames.length>2 ? E.medianStack(frames.map(x=>x.face), FACE_PX) : al.ref.face;
   const best = al.ref;
   const cms = frames.map(x=>x.cm).filter(Boolean);
