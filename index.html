@@ -349,7 +349,7 @@ body.scanning .remain{min-height:0;font-size:12px;line-height:1.35}
   <div class="row"><button class="btn primary small" id="btnMakeDesign">用剛掃的 6 面建立圖案檔</button></div>
   <div class="row" style="margin-top:8px"><button class="btn small" id="btnExport">匯出圖案檔</button><button class="btn small" id="btnImport">匯入圖案檔</button><button class="btn small" id="btnUseDefault">改回標準圖案</button></div>
   <div class="row" style="margin-top:8px"><button class="btn small" id="btnSim">模擬掃描測試</button><button class="btn small" id="btnCalib" hidden>舊版校正</button></div>
-  <p class="muted" style="font-size:11px;opacity:.7">版本 2026-10-24d</p>
+  <p class="muted" style="font-size:11px;opacity:.7">版本 2026-10-24e</p>
   <div class="row" style="margin-top:12px"><button class="btn ghost" id="btnCloseSettings">關閉</button></div>
 </div></div>
 
@@ -3603,10 +3603,12 @@ async function doDesign(){
   busy(false);
   if(!sol || sol.error){ toast('解法計算失敗'); return; }
   // textures: home facelet k shows design sticker map[k] (re-oriented to the customer's hold)
-  S.refCells = r.map.map(([id,q])=>cellCanvas(S.refFaceCanvas[F[Math.floor(id/9)]], id%9, q));
-  S.solution={ moves:sol.moves, verified:sol.verified, base:sol.base, fix:sol.fix };
-  S.step=0; S.startState=E.cloneState(r.rec.state); S.curState=E.cloneState(r.rec.state);
-  enterSolve();
+  S.designCells = r.map.map(([id,q])=>cellCanvas(S.refFaceCanvas[F[Math.floor(id/9)]], id%9, q));
+  // preview built from the customer's OWN photos: where each home sticker was found, turned upright
+  const st=r.rec.state, m=E.bySlot(st), cap=new Array(54);
+  for(let s=0;s<54;s++){ const f=Math.floor(s/9), k=r.rec.rotOfFace[f]||0, q=E.qOf(F[f], m[s].up); cap[m[s].id]=(f*9+E.capPos(s%9,k))*4+(((4-q-k)%4)+8)%4; }
+  S.jres={ state:st, homeImgCap:cap, valid:true, sol, faceRot:[0,0,0,0,0,0], design:true };
+  S.alts=[S.jres]; S.altIdx=0; S.pvLock={}; useAlt(0);
 }
 $('demoBanner').onclick=()=>openCalib();
 
@@ -4180,6 +4182,7 @@ function useAlt(i){
   showPreview();
 }
 function showPreview(){
+  setHoldTag(null); TURN_TOKEN++;
   S.mode='preview'; stopCamera(); $('scanArea').hidden=true; $('scanArea').style.display='none'; $('preview').hidden=false; $('preview').style.display='flex';
   const el=$('pvPics'); el.innerHTML='';
   S.pvLock = S.pvLock || {}; S.forceCq=[null,null,null,null,null,null];
@@ -4202,6 +4205,8 @@ function showPreview(){
   $('pvNote').className='note '+(res.valid?'':'bad');
   $('pvNote').textContent = res.valid ? ('程式拼出來的 6 張圖如下'+rotNote+'。圖案看起來對，就按「圖都對了，開始解鎖」。') : '拼不出合理的結果。請按「換一個拼法」，或點下方照片重拍不清楚的那一面。';
   $('btnPvOk').disabled = !res.valid || !res.sol;
+  const dz=!!res.design; $('fixHelp').hidden=dz; document.querySelector('.altbar').hidden=dz; document.querySelectorAll('#pvPics .rotc2').forEach(b=>b.hidden=dz);
+  if(dz) $('pvNote').textContent='這是用你拍的照片，照辨識結果拼回去的樣子。6 張都是完整的名畫，就按「圖都對了，開始解鎖」；有一面怪怪的，點下方照片重拍那一面。';
   $('btnAltPrev').disabled = !(S.altIdx>0);
   $('altCnt').textContent = S.alts && S.alts.length>1 ? ('第 '+(S.altIdx+1)+' / '+S.alts.length+' 個') : '';
   updateFixBtn();
@@ -4228,7 +4233,8 @@ function redoFace(f){
   backToScan();
 }
 $('btnPvOk').onclick=()=>{
-  const res=S.jres; S.solution={ moves:res.sol.moves, verified:res.sol.verified, base:res.sol.base, fix:res.sol.fix };
+  const res=S.jres; if(res.design && S.designCells) S.refCells=S.designCells;
+  S.solution={ moves:res.sol.moves, verified:res.sol.verified, base:res.sol.base, fix:res.sol.fix };
   S.step=0; S.startState=E.cloneState(res.state); S.curState=E.cloneState(res.state);
   $('preview').hidden=true; $('preview').style.display='none'; enterSolve();
 };
