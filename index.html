@@ -350,7 +350,7 @@ body.scanning .remain{min-height:0;font-size:12px;line-height:1.35}
   <div class="row" style="margin-top:8px"><button class="btn small" id="btnExport">匯出圖案檔</button><button class="btn small" id="btnImport">匯入圖案檔</button><button class="btn small" id="btnUseDefault">改回標準圖案</button></div>
   <div class="row" style="margin-top:8px"><button class="btn small" id="btnSim">模擬掃描測試</button><button class="btn small" id="btnCalib" hidden>舊版校正</button></div>
   <div class="row" style="margin-top:8px"><button class="btn small" id="btnDiag">下載對位診斷（最近一面）</button></div>
-  <p class="muted" style="font-size:11px;opacity:.7">版本 2026-10-27d</p>
+  <p class="muted" style="font-size:11px;opacity:.7">版本 2026-10-27e</p>
   <div class="row" style="margin-top:12px"><button class="btn ghost" id="btnCloseSettings">關閉</button></div>
 </div></div>
 
@@ -3027,7 +3027,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api; else 
       // inner seams at 1/3 and 2/3 (vertical seams use gx, horizontal use gy)
       let seam = 0;
       const SX = opts.seamMode === 'line' ? G.lx : G.gx, SY = opts.seamMode === 'line' ? G.ly : G.gy;
-      for (const f of [1 / 3, 2 / 3]) { seam += lineScore(SX, lerp(q[0], q[1], f), lerp(q[3], q[2], f)); seam += lineScore(SY, lerp(q[0], q[3], f), lerp(q[1], q[2], f)); }
+      if (opts.seamW !== 0) for (const f of [1 / 3, 2 / 3]) { seam += lineScore(SX, lerp(q[0], q[1], f), lerp(q[3], q[2], f)); seam += lineScore(SY, lerp(q[0], q[3], f), lerp(q[1], q[2], f)); }
       const edge = t[0] + r[0] + bo[0] + l[0];
       // dark plastic rim just outside each edge (hands / desk / background are lighter)
       let rim = 0;
@@ -3038,13 +3038,17 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api; else 
         rim /= 4;
       }
       const sizePen = Math.abs(Math.log(m / s)) * 2;
-      const sc = ((opts.edgeW == null ? 1 : opts.edgeW) * edge / 4 + (opts.seamW == null ? 2 : opts.seamW) * seam / 4 + (opts.rimW || 0) * rim) * (1 - sizePen);
+      const sqPen = opts.squareW ? opts.squareW * Math.max(...L.map(x => Math.abs(x / m - 1))) : 0;
+      const sc = ((opts.edgeW == null ? 1 : opts.edgeW) * edge / 4 + (opts.seamW == null ? 2 : opts.seamW) * seam / 4 + (opts.rimW || 0) * rim) * (1 - sizePen - sqPen);
       if (!best || sc > best.sc) best = { sc, q, edge: edge / 4, seam: seam / 4, m };
     }
     if (!best) { // fall back to the single best line per side
       const q = [inter(cands[0][0], cands[3][0]), inter(cands[0][0], cands[1][0]), inter(cands[2][0], cands[1][0]), inter(cands[2][0], cands[3][0])];
       best = { sc: 0, q, edge: 0, seam: 0, m: s };
     }
+    // presence confidence always uses the full (edges + inner seams) evidence of the chosen quad,
+    // even when the quad itself was chosen from the outer frame only
+    if (opts.seamW === 0 && best.sc) { let sm = 0; const bq = best.q; for (const f of [1 / 3, 2 / 3]) { sm += lineScore(G.gx, lerp(bq[0], bq[1], f), lerp(bq[3], bq[2], f)); sm += lineScore(G.gy, lerp(bq[0], bq[3], f), lerp(bq[1], bq[2], f)); } best.seam = sm / 4; best.sc = best.edge + 2 * best.seam; }
     const q = best.q.map(([x, y]) => [x * k, y * k]); const total = best.edge * 4;
     const d = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
     const sidesLen = [d(q[0], q[1]), d(q[1], q[2]), d(q[2], q[3]), d(q[3], q[0])]; const mean = sidesLen.reduce((a, b) => a + b) / 4;
@@ -3238,7 +3242,7 @@ const CAL_HOW = {
   D:'回到正面朝鏡頭，把底部往鏡頭方向翻起：底面對著鏡頭，原本的正面在畫面上方。'
 };
 const CELL = 100, FACE_PX = 300;
-const T = { lockConf: 7, newFace: 0.07, faceNeed: 8, burstNeed: 5, burstMaxMotion: 0.25, dupDiff: 0.06, tex: 0.035, fit: 0.42, motion: 0.022, stableFrames: 6, dupSim: 0.6, dupSameId: 0.8 };
+const T = { refine: false, designFit: false, lockConf: 7, newFace: 0.07, faceNeed: 8, burstNeed: 5, burstMaxMotion: 0.25, dupDiff: 0.06, tex: 0.035, fit: 0.42, motion: 0.022, stableFrames: 6, dupSim: 0.6, dupSameId: 0.8 };
 
 // ---------------- state ----------------
 const S = {
@@ -3998,7 +4002,7 @@ function jStartFace(){
 // stack the collected frames of this face, then freeze for review
 // lock onto the cube face in one analysed region -> straightened face
 function lockFrame(reg, steps, box, range){
-  const L=E.lockQuad(reg.d, reg.w, reg.h, box||reg.box, {steps: steps||29, range: range||0.16});
+  const L=E.lockQuad(reg.d, reg.w, reg.h, box||reg.box, {steps: steps||29, range: range||0.16, seamW:0, squareW:8, topK:6});
   const conf=L.conf;
   const face=E.warpQuad(reg.d, reg.w, reg.h, L.quad, FACE_PX);
   return { reg, quad:L.quad, ok:L.ok && conf>=T.lockConf, conf, size:L.size, face, sh:E.sharpness({d:face,w:FACE_PX,h:FACE_PX}) };
@@ -4011,7 +4015,11 @@ function bestShift(A,B,n,R,cx,cy){ let b={dx:cx||0,dy:cy||0,e:Infinity}; for(let
 function shiftFace(face,dx,dy){ const o=new Uint8ClampedArray(face.length); for(let y=0;y<FACE_PX;y++){ const sy=Math.min(FACE_PX-1,Math.max(0,y+dy)); for(let x=0;x<FACE_PX;x++){ const sx=Math.min(FACE_PX-1,Math.max(0,x+dx)); const i=(y*FACE_PX+x)*4, j=(sy*FACE_PX+sx)*4; o[i]=face[j]; o[i+1]=face[j+1]; o[i+2]=face[j+2]; o[i+3]=255; } } return o; }
 function alignFrames(frames, forced){
   frames=frames.map(fr=>fr===forced?fr:Object.assign({},fr,{sh2:E.sharpness({d:fr.face,w:FACE_PX,h:FACE_PX})}));
-  const ref=forced||frames.reduce((a,b)=>b.sh2>a.sh2?b:a);
+  const shape=q=>{ const d=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1]); const v=[d(q[0],q[1]),d(q[1],q[2]),d(q[2],q[3]),d(q[3],q[0]),d(q[0],q[2]),d(q[1],q[3])]; const m=(v[0]+v[1]+v[2]+v[3])/4; return v.map(x=>x/m).concat([m]); };
+  const sd=(a,b)=>{ let s=0; for(let i=0;i<6;i++) s+=Math.abs(a[i]-b[i]); return s+Math.abs(Math.log(a[6]/b[6])); };
+  const S6=frames.map(f=>shape(f.quad)); const tot=S6.map(a=>S6.reduce((x,b)=>x+sd(a,b),0)); const mi=tot.indexOf(Math.min(...tot));
+  const near=frames.filter((f,i)=>sd(S6[i],S6[mi])<0.06);
+  const ref=forced||(near.length?near:frames).reduce((a,b)=>b.sh2>a.sh2?b:a);
   if(frames.length<2) return {frames, ref};
   const K=3, R=grayOf(ref.face,K), RF=grayOf(ref.face,2);
   const out=[ref], errs=[];

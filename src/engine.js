@@ -1253,7 +1253,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api; else 
       // inner seams at 1/3 and 2/3 (vertical seams use gx, horizontal use gy)
       let seam = 0;
       const SX = opts.seamMode === 'line' ? G.lx : G.gx, SY = opts.seamMode === 'line' ? G.ly : G.gy;
-      for (const f of [1 / 3, 2 / 3]) { seam += lineScore(SX, lerp(q[0], q[1], f), lerp(q[3], q[2], f)); seam += lineScore(SY, lerp(q[0], q[3], f), lerp(q[1], q[2], f)); }
+      if (opts.seamW !== 0) for (const f of [1 / 3, 2 / 3]) { seam += lineScore(SX, lerp(q[0], q[1], f), lerp(q[3], q[2], f)); seam += lineScore(SY, lerp(q[0], q[3], f), lerp(q[1], q[2], f)); }
       const edge = t[0] + r[0] + bo[0] + l[0];
       // dark plastic rim just outside each edge (hands / desk / background are lighter)
       let rim = 0;
@@ -1264,13 +1264,17 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api; else 
         rim /= 4;
       }
       const sizePen = Math.abs(Math.log(m / s)) * 2;
-      const sc = ((opts.edgeW == null ? 1 : opts.edgeW) * edge / 4 + (opts.seamW == null ? 2 : opts.seamW) * seam / 4 + (opts.rimW || 0) * rim) * (1 - sizePen);
+      const sqPen = opts.squareW ? opts.squareW * Math.max(...L.map(x => Math.abs(x / m - 1))) : 0;
+      const sc = ((opts.edgeW == null ? 1 : opts.edgeW) * edge / 4 + (opts.seamW == null ? 2 : opts.seamW) * seam / 4 + (opts.rimW || 0) * rim) * (1 - sizePen - sqPen);
       if (!best || sc > best.sc) best = { sc, q, edge: edge / 4, seam: seam / 4, m };
     }
     if (!best) { // fall back to the single best line per side
       const q = [inter(cands[0][0], cands[3][0]), inter(cands[0][0], cands[1][0]), inter(cands[2][0], cands[1][0]), inter(cands[2][0], cands[3][0])];
       best = { sc: 0, q, edge: 0, seam: 0, m: s };
     }
+    // presence confidence always uses the full (edges + inner seams) evidence of the chosen quad,
+    // even when the quad itself was chosen from the outer frame only
+    if (opts.seamW === 0 && best.sc) { let sm = 0; const bq = best.q; for (const f of [1 / 3, 2 / 3]) { sm += lineScore(G.gx, lerp(bq[0], bq[1], f), lerp(bq[3], bq[2], f)); sm += lineScore(G.gy, lerp(bq[0], bq[3], f), lerp(bq[1], bq[2], f)); } best.seam = sm / 4; best.sc = best.edge + 2 * best.seam; }
     const q = best.q.map(([x, y]) => [x * k, y * k]); const total = best.edge * 4;
     const d = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
     const sidesLen = [d(q[0], q[1]), d(q[1], q[2]), d(q[2], q[3]), d(q[3], q[0])]; const mean = sidesLen.reduce((a, b) => a + b) / 4;
