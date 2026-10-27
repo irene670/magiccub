@@ -350,7 +350,7 @@ body.scanning .remain{min-height:0;font-size:12px;line-height:1.35}
   <div class="row" style="margin-top:8px"><button class="btn small" id="btnExport">匯出圖案檔</button><button class="btn small" id="btnImport">匯入圖案檔</button><button class="btn small" id="btnUseDefault">改回標準圖案</button></div>
   <div class="row" style="margin-top:8px"><button class="btn small" id="btnSim">模擬掃描測試</button><button class="btn small" id="btnCalib" hidden>舊版校正</button></div>
   <div class="row" style="margin-top:8px"><button class="btn small" id="btnDiag">下載對位診斷（最近一面）</button></div>
-  <p class="muted" style="font-size:11px;opacity:.7">版本 2026-10-27c</p>
+  <p class="muted" style="font-size:11px;opacity:.7">版本 2026-10-27d</p>
   <div class="row" style="margin-top:12px"><button class="btn ghost" id="btnCloseSettings">關閉</button></div>
 </div></div>
 
@@ -3098,12 +3098,15 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api; else 
           if (!n) { bad = true; break; } prof[k] = sm / n; }
         if (bad) continue;
         // darkest valley, then its dark-weighted centre (robust to a flat-bottomed gap)
-        let km = 0; for (let k = 1; k < NO; k++) if (prof[k] < prof[km]) km = k;
-        const sorted = Array.from(prof).sort((a, b) => a - b), bright = sorted[Math.floor(NO * 0.75)], depth = bright - prof[km];
+        const sorted = Array.from(prof).sort((a, b) => a - b);
+        let kmin = 0, kmax = 0; for (let k = 1; k < NO; k++) { if (prof[k] < prof[kmin]) kmin = k; if (prof[k] > prof[kmax]) kmax = k; }
+        const dDark = sorted[Math.floor(NO * 0.75)] - prof[kmin], dLight = prof[kmax] - sorted[Math.floor(NO * 0.25)];
+        const light = dLight > dDark * 1.15, depth = light ? dLight : dDark, km = light ? kmax : kmin, sg = light ? -1 : 1; // sg: work on a valley
         if (depth < (opts.minDepth || 18)) continue;
-        const thr = prof[km] + depth * 0.5; let a = km, b = km; while (a > 0 && prof[a - 1] < thr) a--; while (b < NO - 1 && prof[b + 1] < thr) b++;
+        const pv = k => sg * prof[k];
+        const thr = pv(km) + depth * 0.5; let a = km, b = km; while (a > 0 && pv(a - 1) < thr) a--; while (b < NO - 1 && pv(b + 1) < thr) b++;
         if (a === 0 || b === NO - 1) continue; // valley runs off the search window: not a clean gap
-        let sw = 0, so = 0; for (let k = a; k <= b; k++) { const wt = thr - prof[k] + 1e-3; sw += wt; so += wt * (-R + 2 * R * k / (NO - 1)); }
+        let sw = 0, so = 0; for (let k = a; k <= b; k++) { const wt = thr - pv(k) + 1e-3; sw += wt; so += wt * (-R + 2 * R * k / (NO - 1)); }
         const o = so / sw, wm = (w0 + w1) / 2;
         meas.push({ t, vert, wm, P: vert ? M(t + o, wm) : M(wm, t + o), wt: depth });
       }
@@ -3136,7 +3139,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api; else 
     // valley strength of each column / row: neighbours on both sides brighter than the line (median over the line)
     const prof = (vert, dd) => { const v = new Float32Array(N), buf = [];
       for (let k = dd; k < N - dd; k++) { buf.length = 0;
-        for (let t = Math.round(N * 0.12); t < N * 0.88; t += 2) { const c = vert ? L[t * N + k] : L[k * N + t], a = vert ? L[t * N + k - dd] : L[(k - dd) * N + t], b = vert ? L[t * N + k + dd] : L[(k + dd) * N + t]; buf.push(Math.min(a, b) - c); }
+        for (let t = Math.round(N * 0.12); t < N * 0.88; t += 2) { const c = vert ? L[t * N + k] : L[k * N + t], a = vert ? L[t * N + k - dd] : L[(k - dd) * N + t], b = vert ? L[t * N + k + dd] : L[(k + dd) * N + t]; buf.push(Math.max(Math.min(a, b) - c, c - Math.max(a, b))); }
         buf.sort((x, y) => x - y); v[k] = Math.max(v[k], Math.max(0, buf[Math.floor(buf.length * 0.5)]) + 0.5 * Math.max(0, buf[Math.floor(buf.length * 0.75)])); }
       const sm = new Float32Array(N); for (let k = 1; k < N - 1; k++) sm[k] = Math.max(v[k - 1], v[k], v[k + 1]); return sm; };
     const pick = (V) => {
