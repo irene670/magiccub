@@ -350,7 +350,7 @@ body.scanning .remain{min-height:0;font-size:12px;line-height:1.35}
   <div class="row" style="margin-top:8px"><button class="btn small" id="btnExport">匯出圖案檔</button><button class="btn small" id="btnImport">匯入圖案檔</button><button class="btn small" id="btnUseDefault">改回標準圖案</button></div>
   <div class="row" style="margin-top:8px"><button class="btn small" id="btnSim">模擬掃描測試</button><button class="btn small" id="btnCalib" hidden>舊版校正</button></div>
   <div class="row" style="margin-top:8px"><button class="btn small" id="btnDiag">下載對位診斷（最近一面）</button></div>
-  <p class="muted" style="font-size:11px;opacity:.7">版本 2026-10-27b</p>
+  <p class="muted" style="font-size:11px;opacity:.7">版本 2026-10-27c</p>
   <div class="row" style="margin-top:12px"><button class="btn ghost" id="btnCloseSettings">關閉</button></div>
 </div></div>
 
@@ -4044,7 +4044,7 @@ async function jFinishFrames(frames){
     setStatus('依圖案檔對準九宮格…'); await sleep(10);
     try{ const sh=frames.map(fr=>E.sharpness({d:fr.face,w:FACE_PX,h:FACE_PX})); const i=sh.indexOf(Math.max(...sh)); const fr=frames[i];
       const r=E.designFitQuad(fr.reg.d, fr.reg.w, fr.reg.h, fr.quad, S.ref);
-      if(r.gain>0){ forced=Object.assign({},fr,{quad:r.quad, face:E.warpQuad(fr.reg.d, fr.reg.w, fr.reg.h, r.quad, FACE_PX), sh2:sh[i], fit:r.gain}); frames=frames.map((x,j)=>j===i?forced:x); }
+      if(r.gain>0 && r.cost<(T.designFitMax||0.45)){ forced=Object.assign({},fr,{quad:r.quad, face:E.warpQuad(fr.reg.d, fr.reg.w, fr.reg.h, r.quad, FACE_PX), sh2:sh[i], fit:r.gain}); frames=frames.map((x,j)=>j===i?forced:x); }
     }catch(e){ console.warn('designFit', e); }
   }
   const al=alignFrames(frames, forced); frames=al.frames;
@@ -4099,7 +4099,10 @@ function jTick(pats, motion, reg){
   let tb=null, rng=0.16;
   if(S.lockStreak>=1 && S.dispQ){ const q=S.dispQ; const cx=(q[0][0]+q[1][0]+q[2][0]+q[3][0])/4, cy=(q[0][1]+q[1][1]+q[2][1]+q[3][1])/4; const sz=(Math.hypot(q[1][0]-q[0][0],q[1][1]-q[0][1])+Math.hypot(q[2][0]-q[1][0],q[2][1]-q[1][1]))/2; tb={x:cx-sz/2,y:cy-sz/2,s:sz}; rng=0.08; }
   let fr;
-  if(tb){ fr=lockFrame(reg, 27, tb, rng); }
+  if(tb){ let best=lockFrame(reg, 27, tb, rng); S.trk=(S.trk||0)+1;
+    // the cube may have moved nearer / further: every 3rd frame (or when the lock looks weak) also try a smaller and a larger box
+    if(!best.ok || S.trk%3===0) for(const k of [0.86,1.14]){ const s2=tb.s*k, t2={x:tb.x+(tb.s-s2)/2, y:tb.y+(tb.s-s2)/2, s:s2}; const f2=lockFrame(reg, 27, t2, rng); if(f2.conf>best.conf) best=f2; }
+    fr=best; }
   else { // searching: try three sizes in this frame, keep the most confident lock
     const b=reg.box; let best=null;
     for(const k of [1,0.84]){ const s2=b.s*k; const t2={x:b.x+(b.s-s2)/2, y:b.y+(b.s-s2)/2, s:s2}; const f2=lockFrame(reg, 25, t2, 0.16); f2.tb=t2; if(!best || f2.conf>best.conf) best=f2; }
@@ -4110,9 +4113,10 @@ function jTick(pats, motion, reg){
   const sides=q=>[0,1,2,3].map(i=>Math.hypot(q[(i+1)%4][0]-q[i][0], q[(i+1)%4][1]-q[i][1]));
   let consistent=true;
   if(S.lastGood){ const a=sides(S.lastGood), f2=sides(fr.quad), m=(a[0]+a[1]+a[2]+a[3])/4;
-    const shapeDev=Math.max(...f2.map((L,i)=>Math.abs(L-a[i])))/m;
+    const m2=(f2[0]+f2[1]+f2[2]+f2[3])/4; const scaleChg=Math.abs(m2/m-1);
+    const shapeDev=Math.max(...f2.map((L,i)=>Math.abs(L/m2-a[i]/m)));
     const jump=Math.max(...fr.quad.map((p,c)=>Math.hypot(p[0]-S.lastGood[c][0],p[1]-S.lastGood[c][1])))/m;
-    consistent = shapeDev<0.04 && jump<0.12; }
+    consistent = shapeDev<0.04 && scaleChg<0.2 && jump<0.18; }
   const good = fr.ok && consistent && motion<T.burstMaxMotion;
   if(good){ S.lastGood=fr.quad.map(p=>p.slice()); S.lockStreak=(S.lockStreak||0)+1; S.lockMiss=0; S.dispQ = S.dispQ && S.lockStreak>1 ? S.dispQ.map((p,c)=>[p[0]*0.55+fr.quad[c][0]*0.45, p[1]*0.55+fr.quad[c][1]*0.45]) : fr.quad.map(p=>p.slice()); }
   else { S.lockMiss=(S.lockMiss||0)+1; if(S.lockMiss>=4){ S.lockStreak=0; S.dispQ=null; S.lastGood=null; } }
