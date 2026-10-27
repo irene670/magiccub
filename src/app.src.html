@@ -346,7 +346,7 @@ body.scanning .remain{min-height:0;font-size:12px;line-height:1.35}
   <div class="row" style="margin-top:8px"><button class="btn small" id="btnExport">匯出圖案檔</button><button class="btn small" id="btnImport">匯入圖案檔</button><button class="btn small" id="btnUseDefault">改回標準圖案</button></div>
   <div class="row" style="margin-top:8px"><button class="btn small" id="btnSim">模擬掃描測試</button><button class="btn small" id="btnCalib" hidden>舊版校正</button></div>
   <div class="row" style="margin-top:8px"><button class="btn small" id="btnDiag">下載對位診斷（最近一面）</button></div>
-  <p class="muted" style="font-size:11px;opacity:.7">版本 2026-10-27a</p>
+  <p class="muted" style="font-size:11px;opacity:.7">版本 2026-10-27b</p>
   <div class="row" style="margin-top:12px"><button class="btn ghost" id="btnCloseSettings">關閉</button></div>
 </div></div>
 
@@ -1249,7 +1249,7 @@ function jTick(pats, motion, reg){
   if(BURST.frames.length && coarseDiff(cm,BURST.frames[0].cm,true)>0.12) resetBurst();   // a different face came into view
   // acquire: try the guide size and two smaller sizes (cube held further away); once locked, track it
   let tb=null, rng=0.16;
-  if(S.lockStreak>=1 && S.lastGood){ const q=S.lastGood; const cx=(q[0][0]+q[1][0]+q[2][0]+q[3][0])/4, cy=(q[0][1]+q[1][1]+q[2][1]+q[3][1])/4; const sz=(Math.hypot(q[1][0]-q[0][0],q[1][1]-q[0][1])+Math.hypot(q[2][0]-q[1][0],q[2][1]-q[1][1]))/2; tb={x:cx-sz/2,y:cy-sz/2,s:sz}; rng=0.13; }
+  if(S.lockStreak>=1 && S.dispQ){ const q=S.dispQ; const cx=(q[0][0]+q[1][0]+q[2][0]+q[3][0])/4, cy=(q[0][1]+q[1][1]+q[2][1]+q[3][1])/4; const sz=(Math.hypot(q[1][0]-q[0][0],q[1][1]-q[0][1])+Math.hypot(q[2][0]-q[1][0],q[2][1]-q[1][1]))/2; tb={x:cx-sz/2,y:cy-sz/2,s:sz}; rng=0.08; }
   let fr;
   if(tb){ fr=lockFrame(reg, 27, tb, rng); }
   else { // searching: try three sizes in this frame, keep the most confident lock
@@ -1270,7 +1270,7 @@ function jTick(pats, motion, reg){
   else { S.lockMiss=(S.lockMiss||0)+1; if(S.lockMiss>=4){ S.lockStreak=0; S.dispQ=null; S.lastGood=null; } }
   if(S.dispQ && S.lockStreak>=2) drawLock(reg, S.dispQ, '#86c39a'); else clearLock();
   $('guide').className = (S.lockStreak>=2) ? 'armed' : 'ready';
-  if(good && S.lockStreak>=2){
+  if(good){
     BURST.maxSharp=Math.max(BURST.maxSharp,fr.sh); BURST.frames.push(fr);
     BURST.frames=BURST.frames.filter(x=>x.sh>=BURST.maxSharp*0.55).slice(-T.faceNeed);
   }
