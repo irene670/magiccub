@@ -317,7 +317,7 @@ body.scanning .remain{min-height:0;font-size:12px;line-height:1.35}
       <div class="note" id="fixHelp">圖拼錯了？按<b>「換一個拼法」</b>，程式會重新判斷每一面拍照時拿的方向；還是不對，就點下方照片<b>重拍不清楚的那一面</b>。中間格方向不對可按「↻ 中格」。</div>
       <div class="altbar"><button class="btn" id="btnAltPrev" aria-label="看上一個拼法" disabled>‹</button><button class="btn" id="btnFix">換一個拼法</button><span class="cnt" id="altCnt"></span></div>
       <div class="redo" id="pvRedo"><div class="lab">某一面拍得模糊或歪掉？點那張照片，<b>只重拍那一面</b>：</div><div class="rr" id="pvRedoRow"></div></div>
-      <div class="fixbar"><button class="pill" id="btnDump">下載掃描資料</button></div>
+      <div class="fixbar"><button class="btn small" id="btnUseDesign">圖不對？改用圖案檔辨識</button><button class="pill" id="btnDump">下載掃描資料</button></div>
       <div class="row pvActions">
         <button class="btn ghost" id="btnPvBack">回去重拍</button>
         <button class="btn primary" id="btnPvOk">圖都對了，開始解鎖</button>
@@ -333,8 +333,8 @@ body.scanning .remain{min-height:0;font-size:12px;line-height:1.35}
   <h2>設定</h2>
   <h3>辨識方式</h3>
   <div class="seg">
-    <label><input type="radio" name="recog" id="rDesign" value="design"><span><b>圖案檔比對（推薦）</b>用「還原好的方塊」6 面照片當標準，辨識最準。</span></label>
-    <label><input type="radio" name="recog" id="rJigsaw" value="jigsaw"><span><b>自動拼圖</b>沒有圖案檔時用，程式自己把圖拼回去，成功率較低。</span></label>
+    <label><input type="radio" name="recog" id="rJigsaw" value="jigsaw"><span><b>自動拼圖（預設）</b>程式自己把圖拼回去；拼不出來會自動改用圖案檔。</span></label>
+    <label><input type="radio" name="recog" id="rDesign" value="design"><span><b>直接用圖案檔比對</b>用「還原好的方塊」6 面照片當標準。</span></label>
   </div>
   <div class="seg" hidden>
     <label><input type="radio" name="method" id="mJigsaw" value="jigsaw"><span>guided</span></label>
@@ -350,7 +350,7 @@ body.scanning .remain{min-height:0;font-size:12px;line-height:1.35}
   <div class="row" style="margin-top:8px"><button class="btn small" id="btnExport">匯出圖案檔</button><button class="btn small" id="btnImport">匯入圖案檔</button><button class="btn small" id="btnUseDefault">改回標準圖案</button></div>
   <div class="row" style="margin-top:8px"><button class="btn small" id="btnSim">模擬掃描測試</button><button class="btn small" id="btnCalib" hidden>舊版校正</button></div>
   <div class="row" style="margin-top:8px"><button class="btn small" id="btnDiag">下載對位診斷（最近一面）</button></div>
-  <p class="muted" style="font-size:11px;opacity:.7">版本 2026-10-27e</p>
+  <p class="muted" style="font-size:11px;opacity:.7">版本 2026-10-27f</p>
   <div class="row" style="margin-top:12px"><button class="btn ghost" id="btnCloseSettings">關閉</button></div>
 </div></div>
 
@@ -3622,7 +3622,7 @@ $('btnFlip').onclick=()=>{ S.facing = S.facing==='user'?'environment':'user'; st
 $('btnUndo').onclick=()=>{ if(S.method==='jigsaw'){ const last=[...J_ORDER].reverse().find(f=>S.jf[f]); if(last){ delete S.jf[last]; if(S.doneLive) delete S.doneLive[last]; S.jpending=null; jShowScanCube(); jRenderChips(); jRenderRemain(); jUpdateProgress(); jReady(); toast('請重拍「'+J_NAMES[last]+'」面'); } return; } if(S.caps.length) removeCap(S.caps.length-1); };
 $('btnNext').onclick=()=> S.method==='jigsaw' ? ((S.recog==='design' && S.ref) ? doDesign() : doJigsaw()) : doSolve();
 // recognise against the design (solved-cube photos), in the frame the customer is holding the cube
-async function doDesign(){
+async function doDesign(fromJigsaw){
   if(jCount()<6) return;
   busy(true,'辨識方塊中…'); await sleep(30);
   let r=null;
@@ -3636,7 +3636,7 @@ async function doDesign(){
     let msg='辨識不出來。', worst=null;
     if(r && r.rec0 && r.rec0.valid && r.reason==='centres') msg='6 面都認得出來，但掃描時的拿法順序不對（例如沒有照指示轉、或上下面拿反）。請按「全部重掃」，照動畫一步一步轉。';
     else if(r && r.rec0){ const per=[0,0,0,0,0,0]; r.rec0.perSticker.forEach((v,i)=>per[Math.floor(i/9)]+=v); const sf=per.indexOf(Math.max(...per)); worst=F[r.rec0.capOfFace[sf]]; msg='「'+J_NAMES[worst]+'」面可能拍得不清楚或格線沒對準，請重拍這一面。也可能這顆方塊跟目前的圖案檔不是同一款。'; }
-    const ch=await choose('辨識失敗', msg, [ worst?{label:'重拍「'+J_NAMES[worst]+'」面', v:'redo', primary:true}:null, {label:'全部重掃', v:'all', primary:!worst}, {label:'改用自動拼圖', v:'jig'} ].filter(Boolean));
+    const ch=await choose('辨識失敗', msg, [ worst?{label:'重拍「'+J_NAMES[worst]+'」面', v:'redo', primary:true}:null, {label:'全部重掃', v:'all', primary:!worst}, fromJigsaw?null:{label:'改用自動拼圖', v:'jig'} ].filter(Boolean));
     if(ch==='redo') redoFace(worst); else if(ch==='all'){ S.jf={}; S.redo=null; backToScan(); } else if(ch==='jig') doJigsaw();
     return; }
   busy(true,'計算解法…'); await sleep(30);
@@ -4229,6 +4229,7 @@ async function doJigsaw(reopts, label){
   const res=await runJigsaw({ cells: cells.map(c=>({S:c.S,data:Array.from(c.data)})), opts: reopts || { rotSearch:[0,1,3,4,5], rotBeam:120, rotPrefer:[1,4,5], timeMs:2400 }, centers: $('optCenters').checked });
   clearInterval(tick); busy(false);
   if(!res.ok){ console.error(res.error); toast('拼圖失敗：'+res.error.slice(0,80), 4000); return; }
+  if(!reopts && (!res.valid || !res.sol) && S.ref){ toast('自動拼圖拼不出來，改用圖案檔辨識', 2600); return doDesign(true); }
   if(!reopts){ S.alts=[res]; S.altIdx=0; S.pvLock={}; }
   else {
     if(res.noAlt){ toast('找不到其他合理的拼法了。可以多勾幾格對的，或重拍不清楚的那一面。', 4200); S.altIdx=S.alts.length-1; useAlt(S.altIdx); return; }
@@ -4266,7 +4267,7 @@ function showPreview(){
   $('pvNote').className='note '+(res.valid?'':'bad');
   $('pvNote').textContent = res.valid ? ('程式拼出來的 6 張圖如下'+rotNote+'。圖案看起來對，就按「圖都對了，開始解鎖」。') : '拼不出合理的結果。請按「換一個拼法」，或點下方照片重拍不清楚的那一面。';
   $('btnPvOk').disabled = !res.valid || !res.sol;
-  const dz=!!res.design; $('fixHelp').hidden=dz; document.querySelector('.altbar').hidden=dz; document.querySelectorAll('#pvPics .rotc2').forEach(b=>b.hidden=dz);
+  const dz=!!res.design; $('fixHelp').hidden=dz; $('btnUseDesign').hidden=dz || !S.ref; document.querySelector('.altbar').hidden=dz; document.querySelectorAll('#pvPics .rotc2').forEach(b=>b.hidden=dz);
   if(dz) $('pvNote').textContent='這是用你拍的照片，照辨識結果拼回去的樣子。6 張都是完整的名畫，就按「圖都對了，開始解鎖」；有一面怪怪的，點下方照片重拍那一面。';
   $('btnAltPrev').disabled = !(S.altIdx>0);
   $('altCnt').textContent = S.alts && S.alts.length>1 ? ('第 '+(S.altIdx+1)+' / '+S.alts.length+' 個') : '';
@@ -4335,6 +4336,7 @@ $('btnFix').onclick=()=>{
   }
   doJigsaw({ lockCap:lock, avoid: centreOnly? [] : avoid, faceRot:S.jres.faceRot, rotSearch:[0,1,3,4,5], rotBeam:120, timeMs:2400 }, '依你勾的格子重新拼圖…（約 10～30 秒）');
 };
+$('btnUseDesign').onclick=()=>doDesign(true);
 $('btnAltPrev').onclick=()=>{ if(S.altIdx>0){ S.altIdx--; useAlt(S.altIdx); } };
 $('btnDiag').onclick=()=>{
   const B=S.lastBurst; if(!B){ toast('還沒有拍照資料，先拍一面'); return; }
@@ -4384,7 +4386,7 @@ function setMethod(m){
   if(S.mode==='scan'){ showScanCube(); renderChips(); renderRemain(); updateProgress(); if(m==='jigsaw') jReady(); else setJState(null); }
 }
 $('mJigsaw').onchange=()=>setMethod('jigsaw'); $('mLibrary').onchange=()=>setMethod('library');
-function setRecog(r){ S.recog=r; store.set('pc_recog',r); $('rDesign').checked=r==='design'; $('rJigsaw').checked=r==='jigsaw'; }
+function setRecog(r){ S.recog=r; store.set('pc_recog2',r); $('rDesign').checked=r==='design'; $('rJigsaw').checked=r==='jigsaw'; }
 $('rDesign').onchange=()=>setRecog('design'); $('rJigsaw').onchange=()=>setRecog('jigsaw');
 $('btnMakeDesign').onclick=async()=>{
   if(jCount()<6){ toast('請先把還原好的方塊 6 面都掃完'); return; }
@@ -4401,7 +4403,7 @@ $('btnUseDefault').onclick=async()=>{ store.set('pc_calib_v1',''); await setCali
 // ---------------- boot ----------------
 (async function boot(){
   initThree(); layoutGuide(); new ResizeObserver(layoutGuide).observe($('viewport'));
-  S.method = 'jigsaw'; setRecog(store.get('pc_recog') || 'design');
+  S.method = 'jigsaw'; setRecog(store.get('pc_recog2') || 'jigsaw');
   await loadCalibration();
   setMethod(S.method);
   renderChips(); updateProgress(); showScanCube();
